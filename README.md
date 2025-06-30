@@ -29,17 +29,24 @@ Veloutro Bot позволяет пользователям создавать м
 1. Клонируйте репозиторий:
 
 ```bash
-git clone https://github.com/nixon_orel/velo_utro_bot.git
+git clone https://github.com/nixon-orel/velo_utro_bot.git
 cd velo_utro_bot
 ```
 
-2. Установите зависимости:
+2. Установите системные зависимости PostgreSQL:
+
+```bash
+sudo apt update
+sudo apt install libpq-dev postgresql-client postgresql postgresql-contrib
+```
+
+3. Установите зависимости Ruby:
 
 ```bash
 bundle install
 ```
 
-3. Создайте файл `.env` и заполните его своими данными:
+4. Создайте файл `.env` и заполните его своими данными:
 
 ```bash
 cp .env.example .env
@@ -83,9 +90,16 @@ TIMEZONE=Europe/Moscow
 
 #### Создание базы данных:
 
+1. Создайте пользователя PostgreSQL:
+```bash
+sudo -u postgres -H createuser -s $USER
+```
+
+2. Создайте базы данных:
 ```bash
 source .env
-createdb velo_utro_bot_development || createdb velo_utro_bot_production
+createdb velo_utro_bot_development
+createdb velo_utro_bot_production
 ```
 
 #### Применение миграций:
@@ -184,6 +198,7 @@ velo_utro_bot/
 ## Автор
 
 https://github.com/Nixon-orel
+
 TG: @nixonicus
 
 ## Идея и основная логика
