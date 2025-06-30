@@ -124,17 +124,18 @@ def run_bot
       begin
         case message
         when Telegram::Bot::Types::Message
-          next unless message.chat.type == 'private'
-          
           user_id = message.from.id.to_s
           session = Session.load(user_id)
           
           if message.text&.start_with?('/')
-            command = message.text.split(' ').first[1..-1]
+            next unless message.chat.type == 'private'
+            command = message.text.split(' ').first[1..-1].split('@').first
             Bot::Commands.execute(command, bot, message, session)
           elsif session.state
+            next unless message.chat.type == 'private'
             Bot::States.process(session.state, bot, message, session)
           else
+            next unless message.chat.type == 'private'
             bot.api.send_message(
               chat_id: message.chat.id,
               text: I18n.t('unknown_command')
