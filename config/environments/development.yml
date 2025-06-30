@@ -1,0 +1,12 @@
+BOT_NAME: "[Dev] Velo Morning Orel Bot"
+BOT_USERNAME: "DevVeloMorningOrelBot"
+WEBHOOK_DOMAIN: "https://example.com"
+STATIC_EVENTS: "🎲 Настолки,🎉 Туса,Другое"
+EVENT_TYPES:
+  - "🚴‍♀️ Велосипед"
+  - "🛶 Активность на воде"
+  - "🎲 Настолки"
+  - "🏃‍♂️ Бег"
+  - "🚶‍♀️ Прогулка"
+  - "🎉 Туса"
+  - "Другое"
