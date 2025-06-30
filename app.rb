@@ -42,13 +42,13 @@ class App < Sinatra::Base
   end
   
   get '/' do
-    'Sport Event Bot'
+    'Velo Utro Bot'
   end
   
   get '/about' do
     <<~HTML
-      <h1>Sport Event Bot</h1>
-      <b>© Ilya Lityuga, 2024</b>
+      <h1>Velo Utro Bot</h1>
+      <b>© Aldushkin Nikita, 2025</b>
     HTML
   end
   
