@@ -30,8 +30,7 @@ module Bot
             map: event.map,
             additional_info: event.additional_info,
             author: {
-              nickname: event.author.nickname,
-              username: event.author.username
+              display_name: event.author.display_name
             }
           },
           participants: participants

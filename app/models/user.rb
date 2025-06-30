@@ -7,23 +7,25 @@ class User < ActiveRecord::Base
                           association_foreign_key: 'event_id'
   
   validates :telegram_id, presence: true, uniqueness: true
-  validates :username, presence: true
   
   def self.find_or_create_from_telegram(telegram_user)
     user = find_by(telegram_id: telegram_user.id.to_s)
     
+    username = telegram_user.first_name.presence || "Пользователь"
+    nickname = telegram_user.username
+    
     if user
-      if user.username != telegram_user.first_name || user.nickname != telegram_user.username
+      if user.username != username || user.nickname != nickname
         user.update(
-          username: telegram_user.first_name,
-          nickname: telegram_user.username
+          username: username,
+          nickname: nickname
         )
       end
     else
       user = create(
         telegram_id: telegram_user.id.to_s,
-        username: telegram_user.first_name,
-        nickname: telegram_user.username
+        username: username,
+        nickname: nickname
       )
     end
     
@@ -36,6 +38,12 @@ class User < ActiveRecord::Base
   end
   
   def display_name
-    nickname.present? ? "@#{nickname}" : username
+    if nickname.present?
+      "@#{nickname}"
+    elsif username.present? && username != "Пользователь"
+      username
+    else
+      "Пользователь #{telegram_id[-4..-1]}"
+    end
   end
 end

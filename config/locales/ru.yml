@@ -241,7 +241,7 @@ ru:
     {{#event.map}}
     🗺️ Карта: {{event.map}}
     {{/event.map}}
-    👤 Автор: {{#event.author.nickname}}@{{event.author.nickname}}{{/event.author.nickname}}{{^event.author.nickname}}{{event.author.username}}{{/event.author.nickname}}
+    👤 Автор: {{event.author.display_name}}
     {{#event.additional_info}}
     📝 Описание: {{event.additional_info}}
     {{/event.additional_info}}

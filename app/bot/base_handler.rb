@@ -51,15 +51,17 @@ module Bot
     end
     
     def get_first_name(message)
+      first_name = nil
+      
       if message.respond_to?(:from) && message.from.respond_to?(:first_name)
-        message.from.first_name
+        first_name = message.from.first_name
       elsif message.respond_to?(:message) &&
             message.message.respond_to?(:from) &&
             message.message.from.respond_to?(:first_name)
-        message.message.from.first_name
-      else
-        "Unknown"
+        first_name = message.message.from.first_name
       end
+      
+      first_name.presence || nil
     end
     
     def get_username(message)
