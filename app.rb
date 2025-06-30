@@ -124,6 +124,9 @@ def run_bot
       begin
         case message
         when Telegram::Bot::Types::Message
+          # Обрабатываем только приватные сообщения
+          next unless message.chat.type == 'private'
+          
           user_id = message.from.id.to_s
           session = Session.load(user_id)
           
@@ -139,6 +142,9 @@ def run_bot
             )
           end
         when Telegram::Bot::Types::CallbackQuery
+          # Обрабатываем callback-запросы только из приватных чатов
+          next unless message.message.chat.type == 'private'
+          
           user_id = message.from.id.to_s
           session = Session.load(user_id)
           
