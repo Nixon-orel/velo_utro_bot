@@ -32,6 +32,12 @@ module Bot
           ],
           [
             Telegram::Bot::Types::InlineKeyboardButton.new(
+              text: I18n.t('buttons.find_date'),
+              callback_data: 'find_date'
+            )
+          ],
+          [
+            Telegram::Bot::Types::InlineKeyboardButton.new(
               text: I18n.t('buttons.find_all'),
               callback_data: 'find_all'
             )

@@ -4,6 +4,8 @@ module Bot
       def execute
         return unless ensure_private_chat
         
+        puts "DEBUG: Creating event for user ID: #{@user.id} (type: #{@user.id.class}), Telegram ID: #{@user.telegram_id}"
+        
         @session.state = 'choose_date'
         @session.new_event = { 'author_id' => @user.id }
         @session.calendar_type = 'create'

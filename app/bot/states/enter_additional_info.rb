@@ -25,6 +25,8 @@ module Bot
       private
       
       def save_event
+        puts "DEBUG: Creating event with author_id: #{@session.new_event['author_id']} (type: #{@session.new_event['author_id'].class})"
+        
         event = Event.new(
           date: Date.parse(@session.new_event['date']),
           time: @session.new_event['time'],
@@ -38,7 +40,12 @@ module Bot
           author_id: @session.new_event['author_id']
         )
         
-        event.save
+        if event.save
+          puts "DEBUG: Event saved successfully with ID: #{event.id}, author_id: #{event.author_id} (type: #{event.author_id.class})"
+        else
+          puts "DEBUG: Failed to save event: #{event.errors.full_messages}"
+        end
+        
         event
       end
     end
