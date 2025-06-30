@@ -124,7 +124,6 @@ def run_bot
       begin
         case message
         when Telegram::Bot::Types::Message
-          # Обрабатываем только приватные сообщения
           next unless message.chat.type == 'private'
           
           user_id = message.from.id.to_s
@@ -142,11 +141,15 @@ def run_bot
             )
           end
         when Telegram::Bot::Types::CallbackQuery
-          # Обрабатываем callback-запросы только из приватных чатов
-          next unless message.message.chat.type == 'private'
-          
           user_id = message.from.id.to_s
-          session = Session.load(user_id)
+          
+          unless message.message.chat.type == 'private'
+            action = message.data.split('-')[0]
+            next unless ['join', 'unjoin'].include?(action)
+            session = OpenStruct.new(data: {})
+          else
+            session = Session.load(user_id)
+          end
           
           if message.data.start_with?('calendar')
             calendar_type = session.calendar_type
