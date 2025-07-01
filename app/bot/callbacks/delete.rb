@@ -26,6 +26,7 @@ module Bot
       def notify_channel_about_deletion(event)
         channel_id = CONFIG['PUBLIC_CHANNEL_ID']
         return unless channel_id
+        return if event.date < Date.today
         
         template = I18n.t('event_deleted_channel_notification')
         message_text = Mustache.render(template, {

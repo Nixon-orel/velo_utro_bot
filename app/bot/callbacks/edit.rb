@@ -13,6 +13,12 @@ module Bot
         buttons = [
           [
             create_button(
+              I18n.t('buttons.edit_date'),
+              "edit_date-#{event.id}"
+            )
+          ],
+          [
+            create_button(
               I18n.t('buttons.edit_time'),
               "edit_time-#{event.id}"
             )

@@ -168,6 +168,36 @@ def run_bot
                   text: I18n.t('choose_time'),
                   parse_mode: 'HTML'
                 )
+              elsif session.state == 'edit_date'
+                event_id = session.edit_event_id
+                event = Event.find_by(id: event_id)
+                
+                if event && event.author_id == User.find_or_create_from_telegram(message.from).id
+                  old_date = event.formatted_date
+                  new_date = Date.parse(result).strftime('%d %B %Y')
+                  
+                  event.update(date: Date.parse(result))
+                  
+                  notifier = Bot::Helpers::Notifier.new(bot)
+                  notifier.notify_participants(event, 'date_changed_notification', { new_date: new_date })
+                  notifier.notify_channel_about_change(event, 'date_changed_channel_notification', { new_date: new_date })
+                  
+                  session.state = nil
+                  session.edit_event_id = nil
+                  session.save_session
+                  
+                  bot.api.send_message(
+                    chat_id: message.message.chat.id,
+                    text: I18n.t('date_saved'),
+                    parse_mode: 'HTML'
+                  )
+                  
+                  bot.api.send_message(
+                    chat_id: message.message.chat.id,
+                    text: I18n.t('event_updated'),
+                    parse_mode: 'HTML'
+                  )
+                end
               elsif session.state == 'find_events_on_date'
                 date = Date.parse(result)
                 next_date = date + 1
