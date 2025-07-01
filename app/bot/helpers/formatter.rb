@@ -21,7 +21,7 @@ module Bot
         Mustache.render(template, {
           title: format_date(event.date),
           event: {
-            type: event.event_type,
+            event_type: event.event_type,
             formatted_time: event.formatted_time,
             location: event.location,
             distance: event.distance,

@@ -42,10 +42,18 @@ module Bot
       def build_event_vars(event, additional_params = {})
         vars = additional_params.dup
         vars[:event] = {
-          type: event.event_type,
+          event_type: event.event_type,
           formatted_date: event.formatted_date,
           formatted_time: event.formatted_time,
-          location: event.location
+          location: event.location,
+          distance: event.distance,
+          pace: event.pace,
+          track: event.track,
+          map: event.map,
+          additional_info: event.additional_info,
+          author: {
+            display_name: event.author.display_name
+          }
         }
         vars
       end
