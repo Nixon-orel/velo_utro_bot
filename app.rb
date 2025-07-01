@@ -174,9 +174,8 @@ def run_bot
                 
                 if event && event.author_id == User.find_or_create_from_telegram(message.from).id
                   old_date = event.formatted_date
-                  new_date = Date.parse(result).strftime('%d %B %Y')
-                  
                   event.update(date: Date.parse(result))
+                  new_date = event.formatted_date
                   
                   notifier = Bot::Helpers::Notifier.new(bot)
                   notifier.notify_participants(event, 'date_changed_notification', { new_date: new_date })
