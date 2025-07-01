@@ -1,3 +1,5 @@
+require 'active_support/time'
+
 class Event < ActiveRecord::Base
   belongs_to :author, class_name: 'User', foreign_key: 'author_id'
   has_and_belongs_to_many :participants, 
@@ -48,7 +50,8 @@ class Event < ActiveRecord::Base
   end
   
   def self.next_24_hours
-    now = Time.zone.now
+    timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
+    now = Time.now.in_time_zone(timezone)
     tomorrow = now + 24.hours
     where(date: now.to_date..tomorrow.to_date).order(:date, :time)
   end

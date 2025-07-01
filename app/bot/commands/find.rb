@@ -48,7 +48,7 @@ module Bot
         
         @bot.api.send_message(
           chat_id: @chat_id,
-          text: I18n.t('choose_date'),
+          text: I18n.t('find_events_interval'),
           reply_markup: markup
         )
       end
