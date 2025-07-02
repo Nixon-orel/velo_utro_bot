@@ -1,4 +1,5 @@
 require 'yaml'
+require 'active_support/time'
 
 ENV['RACK_ENV'] ||= 'development'
 environment = ENV['RACK_ENV']
@@ -18,5 +19,4 @@ CONFIG['DAILY_ANNOUNCEMENT_ENABLED'] = ENV['DAILY_ANNOUNCEMENT_ENABLED'] == 'tru
 CONFIG['DAILY_ANNOUNCEMENT_TIME'] = ENV['DAILY_ANNOUNCEMENT_TIME'] || '08:00'
 CONFIG['TIMEZONE'] = ENV['TIMEZONE'] || 'Europe/Moscow'
 
-require 'active_support/time'
 Time.zone = CONFIG['TIMEZONE']

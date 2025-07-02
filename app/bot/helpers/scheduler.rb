@@ -11,6 +11,9 @@ module Bot
       def start
         return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
         
+        stop if @scheduler && !@scheduler.down?
+        @scheduler = Rufus::Scheduler.new
+        
         time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
         timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
         puts "Starting daily announcement scheduler at #{time} (#{timezone})"
