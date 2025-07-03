@@ -3,31 +3,55 @@ require 'rufus-scheduler'
 module Bot
   module Helpers
     class Scheduler
+      @@instance = nil
+      @@mutex = Mutex.new
+      
+      def self.instance(bot)
+        @@mutex.synchronize do
+          @@instance ||= new(bot)
+        end
+      end
+      
       def initialize(bot)
         @bot = bot
-        @scheduler = Rufus::Scheduler.new
+        @scheduler = nil
+        @job = nil
       end
       
       def start
         return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
         
-        stop if @scheduler && !@scheduler.down?
-        @scheduler = Rufus::Scheduler.new
-        
-        time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
-        timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
-        puts "Starting daily announcement scheduler at #{time} (#{timezone})"
-        
-        @scheduler.cron "0 #{parse_time(time)} * * *", timezone: timezone do
-          send_daily_announcement
+        @@mutex.synchronize do
+          stop
+          
+          @scheduler = Rufus::Scheduler.new
+          
+          time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
+          timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
+          puts "Starting daily announcement scheduler at #{time} (#{timezone})"
+          
+          @job = @scheduler.cron "0 #{parse_time(time)} * * *", timezone: timezone do
+            send_daily_announcement
+          end
+          
+          puts "Daily announcement scheduler started successfully"
         end
-        
-        puts "Daily announcement scheduler started successfully"
       end
       
       def stop
-        @scheduler.shutdown
-        puts "Scheduler stopped"
+        @@mutex.synchronize do
+          if @job
+            @job.unschedule
+            @job = nil
+            puts "Scheduled job unscheduled"
+          end
+          
+          if @scheduler && !@scheduler.down?
+            @scheduler.shutdown
+            @scheduler = nil
+            puts "Scheduler stopped"
+          end
+        end
       end
       
       private
@@ -39,7 +63,8 @@ module Bot
       
       def send_daily_announcement
         begin
-          puts "Sending daily announcement..."
+          current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
+          puts "[#{current_time}] Sending daily announcement..."
           
           events = Event.next_24_hours
           
@@ -59,54 +84,29 @@ module Bot
               parse_mode: 'HTML'
             )
             
-            events.each_with_index do |event, index|
-              message = format_event_with_participants(event)
-              buttons = []
+            events.each do |event|
+              message = Bot::Helpers::Formatter.event_info(event)
               
-              if index == events.length - 1
-                buttons << [
-                  Telegram::Bot::Types::InlineKeyboardButton.new(
-                    text: I18n.t('buttons.more'),
-                    url: "https://t.me/#{CONFIG['BOT_USERNAME']}"
-                  )
-                ]
-              end
-              
-              markup = buttons.empty? ? nil : Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
-              
-              @bot.api.send_message(
+              response = @bot.api.send_message(
                 chat_id: channel_id,
                 text: message,
-                parse_mode: 'HTML',
-                reply_markup: markup
+                parse_mode: 'HTML'
               )
+              
+              if response.dig('result', 'message_id') && !event.channel_message_id
+                event.update(channel_message_id: response.dig('result', 'message_id'))
+              end
             end
           end
           
-          puts "Daily announcement sent successfully"
+          puts "[#{current_time}] Daily announcement sent successfully"
         rescue => e
-          puts "Error sending daily announcement: #{e.message}"
+          current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
+          puts "[#{current_time}] Error sending daily announcement: #{e.message}"
           puts e.backtrace.join("\n")
         end
       end
       
-      def format_event_with_participants(event)
-        message = Bot::Helpers::Formatter.event_info(event)
-        
-        if event.participants.any?
-          participants_text = event.participants.map do |participant|
-            if participant.nickname
-              "@#{participant.nickname}"
-            else
-              participant.username
-            end
-          end.join(', ')
-          
-          message += "\n👥 Участники: #{participants_text}"
-        end
-        
-        message
-      end
     end
   end
 end

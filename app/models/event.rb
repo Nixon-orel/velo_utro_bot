@@ -68,4 +68,21 @@ class Event < ActiveRecord::Base
     @static_events ||= ENV['STATIC_EVENTS'].to_s.split(',').map(&:strip)
     @static_events.include?(event_type)
   end
+  
+  def channel_link
+    return nil unless channel_message_id
+    
+    channel_id = CONFIG['PUBLIC_CHANNEL_ID']
+    return nil unless channel_id
+    
+    if channel_id.start_with?('@')
+      channel_username = channel_id[1..-1]
+      "https://t.me/#{channel_username}/#{channel_message_id}"
+    elsif channel_id.start_with?('-100')
+      clean_channel_id = channel_id[4..-1]
+      "https://t.me/c/#{clean_channel_id}/#{channel_message_id}"
+    else
+      nil
+    end
+  end
 end

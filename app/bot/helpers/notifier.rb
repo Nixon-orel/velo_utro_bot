@@ -51,6 +51,7 @@ module Bot
           track: event.track,
           map: event.map,
           additional_info: event.additional_info,
+          channel_link: event.channel_link,
           author: {
             display_name: event.author.display_name
           }

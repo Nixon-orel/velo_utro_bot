@@ -322,142 +322,56 @@ ru:
   date_changed_channel_notification: |
     📅 <b>Изменение даты мероприятия</b>
 
-    <b>{{event.event_type}}</b>
-    📍 {{event.location}}
-    🕒 {{event.formatted_time}}
-    {{#event.distance}}
-    📏 Расстояние: {{event.distance}}
-    {{/event.distance}}
-    {{#event.pace}}
-    🚴‍♀️ Темп/Скорость: {{event.pace}}
-    {{/event.pace}}
-    {{#event.track}}
-    🛤️ Трек: {{event.track}}
-    {{/event.track}}
-    {{#event.map}}
-    🗺️ Карта: {{event.map}}
-    {{/event.map}}
-    👤 Автор: {{event.author.display_name}}
-    {{#event.additional_info}}
-    📝 Описание: {{event.additional_info}}
-    {{/event.additional_info}}
-    
     📅 Новая дата: <b>{{new_date}}</b>
+    {{#event.channel_link}}
+    
+    🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
+    {{/event.channel_link}}
 
   time_changed_channel_notification: |
     🕒 <b>Изменение времени мероприятия</b>
 
-    <b>{{event.event_type}}</b>
-    📅 {{event.formatted_date}}
-    📍 {{event.location}}
-    {{#event.distance}}
-    📏 Расстояние: {{event.distance}}
-    {{/event.distance}}
-    {{#event.pace}}
-    🚴‍♀️ Темп/Скорость: {{event.pace}}
-    {{/event.pace}}
-    {{#event.track}}
-    🛤️ Трек: {{event.track}}
-    {{/event.track}}
-    {{#event.map}}
-    🗺️ Карта: {{event.map}}
-    {{/event.map}}
-    👤 Автор: {{event.author.display_name}}
-    {{#event.additional_info}}
-    📝 Описание: {{event.additional_info}}
-    {{/event.additional_info}}
-    
     ⏰ Новое время: <b>{{new_time}}</b>
+    {{#event.channel_link}}
+    
+    🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
+    {{/event.channel_link}}
 
   location_changed_channel_notification: |
     📍 <b>Изменение места мероприятия</b>
 
-    <b>{{event.event_type}}</b>
-    📅 {{event.formatted_date}} в {{event.formatted_time}}
-    {{#event.distance}}
-    📏 Расстояние: {{event.distance}}
-    {{/event.distance}}
-    {{#event.pace}}
-    🚴‍♀️ Темп/Скорость: {{event.pace}}
-    {{/event.pace}}
-    {{#event.track}}
-    🛤️ Трек: {{event.track}}
-    {{/event.track}}
-    {{#event.map}}
-    🗺️ Карта: {{event.map}}
-    {{/event.map}}
-    👤 Автор: {{event.author.display_name}}
-    {{#event.additional_info}}
-    📝 Описание: {{event.additional_info}}
-    {{/event.additional_info}}
-    
     🗺️ Новое место: <b>{{new_location}}</b>
+    {{#event.channel_link}}
+    
+    🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
+    {{/event.channel_link}}
 
   track_changed_channel_notification: |
     🛤️ <b>Изменение трека мероприятия</b>
 
-    <b>{{event.event_type}}</b>
-    📅 {{event.formatted_date}} в {{event.formatted_time}}
-    📍 {{event.location}}
-    {{#event.distance}}
-    📏 Расстояние: {{event.distance}}
-    {{/event.distance}}
-    {{#event.pace}}
-    🚴‍♀️ Темп/Скорость: {{event.pace}}
-    {{/event.pace}}
-    {{#event.map}}
-    🗺️ Карта: {{event.map}}
-    {{/event.map}}
-    👤 Автор: {{event.author.display_name}}
-    {{#event.additional_info}}
-    📝 Описание: {{event.additional_info}}
-    {{/event.additional_info}}
-    
     🛤️ Новый трек: <b>{{new_track}}</b>
+    {{#event.channel_link}}
+    
+    🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
+    {{/event.channel_link}}
 
   map_changed_channel_notification: |
     🗺️ <b>Изменение карты мероприятия</b>
 
-    <b>{{event.event_type}}</b>
-    📅 {{event.formatted_date}} в {{event.formatted_time}}
-    📍 {{event.location}}
-    {{#event.distance}}
-    📏 Расстояние: {{event.distance}}
-    {{/event.distance}}
-    {{#event.pace}}
-    🚴‍♀️ Темп/Скорость: {{event.pace}}
-    {{/event.pace}}
-    {{#event.track}}
-    🛤️ Трек: {{event.track}}
-    {{/event.track}}
-    👤 Автор: {{event.author.display_name}}
-    {{#event.additional_info}}
-    📝 Описание: {{event.additional_info}}
-    {{/event.additional_info}}
-    
     🗺️ Новая карта: <b>{{new_map}}</b>
+    {{#event.channel_link}}
+    
+    🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
+    {{/event.channel_link}}
 
   info_changed_channel_notification: |
     📝 <b>Изменение описания мероприятия</b>
 
-    <b>{{event.event_type}}</b>
-    📅 {{event.formatted_date}} в {{event.formatted_time}}
-    📍 {{event.location}}
-    {{#event.distance}}
-    📏 Расстояние: {{event.distance}}
-    {{/event.distance}}
-    {{#event.pace}}
-    🚴‍♀️ Темп/Скорость: {{event.pace}}
-    {{/event.pace}}
-    {{#event.track}}
-    🛤️ Трек: {{event.track}}
-    {{/event.track}}
-    {{#event.map}}
-    🗺️ Карта: {{event.map}}
-    {{/event.map}}
-    👤 Автор: {{event.author.display_name}}
-    
     📝 Новое описание: <b>{{new_info}}</b>
+    {{#event.channel_link}}
+    
+    🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
+    {{/event.channel_link}}
 
   date_changed_notification: |
     ❗️❗️ Внимание ❗️❗️

@@ -38,12 +38,16 @@ module Bot
         
         markup = create_keyboard(buttons)
         
-        @bot.api.send_message(
+        response = @bot.api.send_message(
           chat_id: channel_id,
           text: event_text,
           parse_mode: 'HTML',
           reply_markup: markup
         )
+        
+        if response.dig('result', 'message_id')
+          event.update(channel_message_id: response.dig('result', 'message_id'))
+        end
       rescue => e
         puts "Error publishing to channel: #{e.message}"
       end

@@ -105,7 +105,7 @@ def run_bot
       puts "Failed to set bot commands: #{e.message}"
     end
     
-    scheduler = Bot::Helpers::Scheduler.new(bot)
+    scheduler = Bot::Helpers::Scheduler.instance(bot)
     scheduler.start
     
     Signal.trap('INT') do
