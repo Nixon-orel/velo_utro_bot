@@ -22,7 +22,7 @@ module Bot
         return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
         
         @@mutex.synchronize do
-          stop
+          stop_internal
           
           @scheduler = Rufus::Scheduler.new
           
@@ -40,21 +40,25 @@ module Bot
       
       def stop
         @@mutex.synchronize do
-          if @job
-            @job.unschedule
-            @job = nil
-            puts "Scheduled job unscheduled"
-          end
-          
-          if @scheduler && !@scheduler.down?
-            @scheduler.shutdown
-            @scheduler = nil
-            puts "Scheduler stopped"
-          end
+          stop_internal
         end
       end
       
       private
+      
+      def stop_internal
+        if @job
+          @job.unschedule
+          @job = nil
+          puts "Scheduled job unscheduled"
+        end
+        
+        if @scheduler && !@scheduler.down?
+          @scheduler.shutdown
+          @scheduler = nil
+          puts "Scheduler stopped"
+        end
+      end
       
       def parse_time(time_string)
         hour, minute = time_string.split(':').map(&:to_i)
