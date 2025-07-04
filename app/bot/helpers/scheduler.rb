@@ -3,42 +3,31 @@ require 'rufus-scheduler'
 module Bot
   module Helpers
     class Scheduler
-      @@instance = nil
+      @@global_scheduler = nil
+      @@global_job = nil
       @@mutex = Mutex.new
       
-      def self.instance(bot)
-        @@mutex.synchronize do
-          @@instance ||= new(bot)
-        end
-      end
-      
-      def initialize(bot)
-        @bot = bot
-        @scheduler = nil
-        @job = nil
-      end
-      
-      def start
+      def self.start(bot)
         return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
         
         @@mutex.synchronize do
           stop_internal
           
-          @scheduler = Rufus::Scheduler.new
+          @@global_scheduler = Rufus::Scheduler.new
           
           time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
           timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
           puts "Starting daily announcement scheduler at #{time} (#{timezone})"
           
-          @job = @scheduler.cron "0 #{parse_time(time)} * * *", timezone: timezone do
-            send_daily_announcement
+          @@global_job = @@global_scheduler.cron "0 #{parse_time(time)} * * *", timezone: timezone do
+            send_daily_announcement(bot)
           end
           
           puts "Daily announcement scheduler started successfully"
         end
       end
       
-      def stop
+      def self.stop
         @@mutex.synchronize do
           stop_internal
         end
@@ -46,26 +35,26 @@ module Bot
       
       private
       
-      def stop_internal
-        if @job
-          @job.unschedule
-          @job = nil
+      def self.stop_internal
+        if @@global_job
+          @@global_job.unschedule
+          @@global_job = nil
           puts "Scheduled job unscheduled"
         end
         
-        if @scheduler && !@scheduler.down?
-          @scheduler.shutdown
-          @scheduler = nil
+        if @@global_scheduler && !@@global_scheduler.down?
+          @@global_scheduler.shutdown
+          @@global_scheduler = nil
           puts "Scheduler stopped"
         end
       end
       
-      def parse_time(time_string)
+      def self.parse_time(time_string)
         hour, minute = time_string.split(':').map(&:to_i)
         "#{minute} #{hour}"
       end
       
-      def send_daily_announcement
+      def self.send_daily_announcement(bot)
         begin
           current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
           puts "[#{current_time}] Sending daily announcement..."
@@ -76,13 +65,13 @@ module Bot
           return unless channel_id
           
           if events.empty?
-            @bot.api.send_message(
+            bot.api.send_message(
               chat_id: channel_id,
               text: I18n.t('daily_announcement_no_events'),
               parse_mode: 'HTML'
             )
           else
-            @bot.api.send_message(
+            bot.api.send_message(
               chat_id: channel_id,
               text: I18n.t('daily_announcement_header'),
               parse_mode: 'HTML'
@@ -91,7 +80,7 @@ module Bot
             events.each do |event|
               message = Bot::Helpers::Formatter.event_info(event)
               
-              response = @bot.api.send_message(
+              response = bot.api.send_message(
                 chat_id: channel_id,
                 text: message,
                 parse_mode: 'HTML'
@@ -110,7 +99,6 @@ module Bot
           puts e.backtrace.join("\n")
         end
       end
-      
     end
   end
 end

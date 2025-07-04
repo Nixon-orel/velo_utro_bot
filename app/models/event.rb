@@ -52,8 +52,21 @@ class Event < ActiveRecord::Base
   def self.next_24_hours
     timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
     now = Time.now.in_time_zone(timezone)
-    tomorrow = now + 24.hours
-    where(date: now.to_date..tomorrow.to_date).order(:date, :time)
+    end_time = now + 24.hours
+    
+    events = []
+    
+    (now.to_date..end_time.to_date).each do |date|
+      date_events = where(date: date).order(:time)
+      date_events.each do |event|
+        event_datetime = Time.zone.parse("#{event.date} #{event.time}")
+        if event_datetime >= now && event_datetime <= end_time
+          events << event
+        end
+      end
+    end
+    
+    events.sort_by { |event| [event.date, event.time] }
   end
   
   def has_participant?(user)

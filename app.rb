@@ -105,18 +105,17 @@ def run_bot
       puts "Failed to set bot commands: #{e.message}"
     end
     
-    scheduler = Bot::Helpers::Scheduler.instance(bot)
-    scheduler.start
+    Bot::Helpers::Scheduler.start(bot)
     
     Signal.trap('INT') do
       puts "\nShutting down..."
-      scheduler.stop
+      Bot::Helpers::Scheduler.stop
       exit
     end
     
     Signal.trap('TERM') do
       puts "\nShutting down..."
-      scheduler.stop
+      Bot::Helpers::Scheduler.stop
       exit
     end
     
