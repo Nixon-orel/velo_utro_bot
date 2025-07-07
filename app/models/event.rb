@@ -54,18 +54,35 @@ class Event < ActiveRecord::Base
     now = Time.now.in_time_zone(timezone)
     end_time = now + 24.hours
     
+    puts "Looking for events between #{now} and #{end_time}"
+    
     events = []
     
     (now.to_date..end_time.to_date).each do |date|
+      puts "Checking date: #{date}"
       date_events = where(date: date).order(:time)
+      puts "Found #{date_events.count} events on #{date}"
+      
       date_events.each do |event|
-        event_datetime = Time.zone.parse("#{event.date} #{event.time}")
-        if event_datetime >= now && event_datetime <= end_time
-          events << event
+        begin
+          hour, minute = event.time.split(':').map(&:to_i)
+          event_datetime = Time.parse("#{event.date} #{event.time}").in_time_zone(timezone)
+          puts "Event: #{event.event_type} at #{event_datetime} (from #{event.date} #{event.time}), now: #{now}, end: #{end_time}"
+          puts "Conditions: >= now: #{event_datetime >= now}, <= end: #{event_datetime <= end_time}"
+          
+          if event_datetime >= now && event_datetime <= end_time
+            puts "Adding event to list"
+            events << event
+          else
+            puts "Event does not match time criteria"
+          end
+        rescue => e
+          puts "Error parsing event time: #{e.message} for event #{event.id} with time '#{event.time}'"
         end
       end
     end
     
+    puts "Total events found: #{events.count}"
     events.sort_by { |event| [event.date, event.time] }
   end
   
@@ -85,7 +102,7 @@ class Event < ActiveRecord::Base
   def channel_link
     return nil unless channel_message_id
     
-    channel_id = CONFIG['PUBLIC_CHANNEL_ID']
+    channel_id = ENV['PUBLIC_CHANNEL_ID']
     return nil unless channel_id
     
     if channel_id.start_with?('@')

@@ -1,6 +1,6 @@
 module Bot
   module Commands
-    class My_events
+    class MyEvents
       def initialize(bot, message, session)
         @bot = bot
         @message = message

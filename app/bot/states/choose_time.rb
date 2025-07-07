@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Choose_time < Bot::StateHandler
+    class ChooseTime < Bot::StateHandler
       def process
         time = @message.text
         

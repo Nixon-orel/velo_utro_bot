@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Choose_track < Bot::StateHandler
+    class ChooseTrack < Bot::StateHandler
       def process
         track = @message.text
         track = track == '-' ? nil : track

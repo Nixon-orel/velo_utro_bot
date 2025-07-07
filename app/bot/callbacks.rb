@@ -9,12 +9,7 @@ module Bot
     
     def self.process(callback_data, bot, callback, session)
       action = callback_data.split('-')[0]
-      
-      callback_class = action.capitalize
-      
-      unless const_defined?(callback_class)
-        callback_class = action.split('_').map(&:capitalize).join('_')
-      end
+      callback_class = action.split('_').map(&:capitalize).join('')
       
       if const_defined?(callback_class)
         const_get(callback_class).new(bot, callback, session).process

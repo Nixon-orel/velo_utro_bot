@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Choose_pace < Bot::StateHandler
+    class ChoosePace < Bot::StateHandler
       def process
         pace = @message.text
         

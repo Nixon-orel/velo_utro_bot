@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Choose_map < Bot::StateHandler
+    class ChooseMap < Bot::StateHandler
       def process
         map = @message.text
         map = map == '-' ? nil : map

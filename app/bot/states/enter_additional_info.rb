@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Enter_additional_info < Bot::StateHandler
+    class EnterAdditionalInfo < Bot::StateHandler
       def process
         additional_info = @message.text
         additional_info = nil if additional_info == '-'

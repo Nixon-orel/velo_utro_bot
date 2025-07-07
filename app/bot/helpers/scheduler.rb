@@ -6,30 +6,51 @@ module Bot
       @@global_scheduler = nil
       @@global_job = nil
       @@mutex = Mutex.new
+      @@lock_file = nil
+      LOCK_FILE_PATH = '/tmp/velo_utro_bot_scheduler.lock'
       
       def self.start(bot)
         return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
         
         @@mutex.synchronize do
-          stop_internal
-          
-          @@global_scheduler = Rufus::Scheduler.new
-          
-          time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
-          timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
-          puts "Starting daily announcement scheduler at #{time} (#{timezone})"
-          
-          @@global_job = @@global_scheduler.cron "0 #{parse_time(time)} * * *", timezone: timezone do
-            send_daily_announcement(bot)
+          # Попытка получить файловую блокировку
+          if acquire_lock
+            stop_internal
+            
+            @@global_scheduler = Rufus::Scheduler.new
+            
+            time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
+            timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
+            puts "[PID #{Process.pid}] Starting daily announcement scheduler at #{time} (#{timezone})"
+            
+            @@global_job = @@global_scheduler.cron "0 #{parse_time(time)} * * *", timezone: timezone do
+              send_daily_announcement(bot)
+            end
+            
+            puts "[PID #{Process.pid}] Daily announcement scheduler started successfully"
+          else
+            puts "[PID #{Process.pid}] Another scheduler instance is already running, skipping..."
           end
-          
-          puts "Daily announcement scheduler started successfully"
         end
       end
       
       def self.stop
+        stop_internal
+        release_lock
+      end
+      
+      def self.status
         @@mutex.synchronize do
-          stop_internal
+          job_active = @@global_job && @@global_job.respond_to?(:next_time)
+          
+          {
+            scheduler_running: @@global_scheduler && !@@global_scheduler.down?,
+            job_active: job_active,
+            next_run: job_active ? @@global_job.next_time : nil,
+            cron_expression: job_active ? @@global_job.original : nil,
+            jobs_count: @@global_scheduler&.jobs&.count || 0,
+            lock_file_exists: File.exist?(LOCK_FILE_PATH)
+          }
         end
       end
       
@@ -37,15 +58,47 @@ module Bot
       
       def self.stop_internal
         if @@global_job
-          @@global_job.unschedule
+          if @@global_job.respond_to?(:unschedule)
+            @@global_job.unschedule
+            puts "[PID #{Process.pid}] Scheduled job unscheduled"
+          else
+            puts "[PID #{Process.pid}] Job object is not valid (#{@@global_job.class}): #{@@global_job}"
+          end
           @@global_job = nil
-          puts "Scheduled job unscheduled"
         end
         
         if @@global_scheduler && !@@global_scheduler.down?
           @@global_scheduler.shutdown
           @@global_scheduler = nil
-          puts "Scheduler stopped"
+          puts "[PID #{Process.pid}] Scheduler stopped"
+        end
+      end
+      
+      def self.acquire_lock
+        begin
+          @@lock_file = File.open(LOCK_FILE_PATH, File::RDWR | File::CREAT, 0644)
+          if @@lock_file.flock(File::LOCK_EX | File::LOCK_NB)
+            @@lock_file.write(Process.pid.to_s)
+            @@lock_file.flush
+            true
+          else
+            @@lock_file.close
+            @@lock_file = nil
+            false
+          end
+        rescue => e
+          puts "[PID #{Process.pid}] Error acquiring lock: #{e.message}"
+          false
+        end
+      end
+      
+      def self.release_lock
+        if @@lock_file
+          @@lock_file.flock(File::LOCK_UN)
+          @@lock_file.close
+          File.delete(LOCK_FILE_PATH) if File.exist?(LOCK_FILE_PATH)
+          @@lock_file = nil
+          puts "[PID #{Process.pid}] Lock released"
         end
       end
       
@@ -56,8 +109,10 @@ module Bot
       
       def self.send_daily_announcement(bot)
         begin
+          return unless @@lock_file
+          
           current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
-          puts "[#{current_time}] Sending daily announcement..."
+          puts "[#{current_time}] [PID #{Process.pid}] Sending daily announcement..."
           
           events = Event.next_24_hours
           
@@ -80,22 +135,18 @@ module Bot
             events.each do |event|
               message = Bot::Helpers::Formatter.event_info(event)
               
-              response = bot.api.send_message(
+              bot.api.send_message(
                 chat_id: channel_id,
                 text: message,
                 parse_mode: 'HTML'
               )
-              
-              if response.dig('result', 'message_id') && !event.channel_message_id
-                event.update(channel_message_id: response.dig('result', 'message_id'))
-              end
             end
           end
           
-          puts "[#{current_time}] Daily announcement sent successfully"
+          puts "[#{current_time}] [PID #{Process.pid}] Daily announcement sent successfully"
         rescue => e
           current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
-          puts "[#{current_time}] Error sending daily announcement: #{e.message}"
+          puts "[#{current_time}] [PID #{Process.pid}] Error sending daily announcement: #{e.message}"
           puts e.backtrace.join("\n")
         end
       end

@@ -45,8 +45,8 @@ module Bot
           reply_markup: markup
         )
         
-        if response.dig('result', 'message_id')
-          event.update(channel_message_id: response.dig('result', 'message_id'))
+        if response && response.message_id
+          event.update(channel_message_id: response.message_id)
         end
       rescue => e
         puts "Error publishing to channel: #{e.message}"

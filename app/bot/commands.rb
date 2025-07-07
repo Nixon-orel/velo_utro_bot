@@ -8,7 +8,7 @@ module Bot
     end
     
     def self.execute(command, bot, message, session)
-      command_class = command.capitalize
+      command_class = command.split('_').map(&:capitalize).join('')
       
       if const_defined?(command_class)
         const_get(command_class).new(bot, message, session).execute

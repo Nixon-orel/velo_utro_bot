@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Choose_location < Bot::StateHandler
+    class ChooseLocation < Bot::StateHandler
       def process
         location = @message.text
         

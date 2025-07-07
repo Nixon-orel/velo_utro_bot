@@ -1,6 +1,6 @@
 module Bot
   module Callbacks
-    class Edit_location < Bot::CallbackHandler
+    class EditLocation < Bot::CallbackHandler
       def process
         event = get_event
         return unless event

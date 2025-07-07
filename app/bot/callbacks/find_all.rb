@@ -1,6 +1,6 @@
 module Bot
   module Callbacks
-    class Find_all
+    class FindAll
       def initialize(bot, callback, session)
         @bot = bot
         @callback = callback

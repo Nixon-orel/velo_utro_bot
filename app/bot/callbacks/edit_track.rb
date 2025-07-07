@@ -1,6 +1,6 @@
 module Bot
   module Callbacks
-    class Edit_track < Bot::CallbackHandler
+    class EditTrack < Bot::CallbackHandler
       def process
         event = get_event
         return unless event

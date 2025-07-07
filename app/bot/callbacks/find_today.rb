@@ -1,6 +1,6 @@
 module Bot
   module Callbacks
-    class Find_today < Bot::CallbackHandler
+    class FindToday < Bot::CallbackHandler
       def process
         answer_callback_query
         

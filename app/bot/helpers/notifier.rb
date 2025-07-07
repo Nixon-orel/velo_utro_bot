@@ -41,6 +41,9 @@ module Bot
       
       def build_event_vars(event, additional_params = {})
         vars = additional_params.dup
+        channel_link = event.channel_link
+        puts "Event #{event.id}: channel_message_id=#{event.channel_message_id}, channel_link=#{channel_link}"
+        
         vars[:event] = {
           event_type: event.event_type,
           formatted_date: event.formatted_date,
@@ -51,7 +54,7 @@ module Bot
           track: event.track,
           map: event.map,
           additional_info: event.additional_info,
-          channel_link: event.channel_link,
+          channel_link: channel_link,
           author: {
             display_name: event.author.display_name
           }

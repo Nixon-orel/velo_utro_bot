@@ -1,6 +1,6 @@
 module Bot
   module States
-    class Choose_distance < Bot::StateHandler
+    class ChooseDistance < Bot::StateHandler
       def process
         distance = @message.text
         

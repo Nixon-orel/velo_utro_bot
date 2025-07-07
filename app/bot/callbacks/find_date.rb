@@ -1,6 +1,6 @@
 module Bot
   module Callbacks
-    class Find_date
+    class FindDate
       def initialize(bot, callback, session)
         @bot = bot
         @callback = callback

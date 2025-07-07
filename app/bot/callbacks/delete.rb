@@ -10,18 +10,45 @@ module Bot
           return
         end
         
-        if event.participants.any?
-          notifier = Bot::Helpers::Notifier.new(@bot)
-          notifier.notify_participants(event, 'event_deleted_notification')
-        end
+        participants = event.participants.to_a
         
         notify_channel_about_deletion(event)
+        
+        if participants.any?
+          participants.each do |participant|
+            send_deletion_notification(participant, event)
+          end
+        end
+        
         event.destroy
         delete_message
         answer_callback_query(I18n.t('event_deleted'))
       end
       
       private
+      
+      def send_deletion_notification(participant, event)
+        vars = {
+          event: {
+            event_type: event.event_type,
+            formatted_date: event.formatted_date,
+            formatted_time: event.formatted_time
+          }
+        }
+        
+        template = I18n.t('event_deleted_notification')
+        notification = Mustache.render(template, vars)
+        
+        begin
+          @bot.api.send_message(
+            chat_id: participant.telegram_id,
+            text: notification,
+            parse_mode: 'HTML'
+          )
+        rescue => e
+          puts "Failed to notify participant #{participant.telegram_id}: #{e.message}"
+        end
+      end
       
       def notify_channel_about_deletion(event)
         channel_id = CONFIG['PUBLIC_CHANNEL_ID']

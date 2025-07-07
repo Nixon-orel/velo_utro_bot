@@ -9,6 +9,8 @@ require 'i18n'
 require 'logger'
 require 'ostruct'
 
+$PROGRAM_START_TIME = Time.now.to_i
+
 require_relative 'config/initializers/config'
 require_relative 'config/initializers/i18n'
 require_relative 'config/database'

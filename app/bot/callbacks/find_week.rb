@@ -1,6 +1,6 @@
 module Bot
   module Callbacks
-    class Find_week < Bot::CallbackHandler
+    class FindWeek < Bot::CallbackHandler
       def process
         answer_callback_query
         

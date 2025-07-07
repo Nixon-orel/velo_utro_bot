@@ -8,11 +8,7 @@ module Bot
     end
     
     def self.process(state, bot, message, session)
-      state_class = state.capitalize
-      
-      unless const_defined?(state_class)
-        state_class = state.split('_').map(&:capitalize).join('_')
-      end
+      state_class = state.split('_').map(&:capitalize).join('')
       
       if const_defined?(state_class)
         const_get(state_class).new(bot, message, session).process
