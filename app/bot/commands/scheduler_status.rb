@@ -42,6 +42,14 @@ module Bot
         status_info << "🔢 PID: #{Process.pid}"
         status_info << "⏱️ Время запуска: #{Time.at($PROGRAM_START_TIME || Time.now).strftime('%d.%m.%Y %H:%M:%S')}"
         
+        last_announcement_file = '/tmp/velo_utro_bot_last_announcement'
+        if File.exist?(last_announcement_file)
+          last_time = Time.at(File.read(last_announcement_file).to_i)
+          status_info << "📢 Последний анонс: #{last_time.strftime('%d.%m.%Y %H:%M:%S')}"
+        else
+          status_info << "📢 Последний анонс: Не найден"
+        end
+        
         send_message(status_info.join("\n"))
       end
     end

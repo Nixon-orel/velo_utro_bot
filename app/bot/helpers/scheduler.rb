@@ -111,8 +111,24 @@ module Bot
         begin
           return unless @@lock_file
           
+          unless File.exist?(LOCK_FILE_PATH)
+            puts "[PID #{Process.pid}] Lock file disappeared, aborting announcement"
+            return
+          end
+          
           current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
           puts "[#{current_time}] [PID #{Process.pid}] Sending daily announcement..."
+          
+          last_announcement_file = '/tmp/velo_utro_bot_last_announcement'
+          if File.exist?(last_announcement_file)
+            last_announcement_time = File.read(last_announcement_file).to_i
+            time_since_last = current_time.to_i - last_announcement_time
+            
+            if time_since_last < 3600
+              puts "[#{current_time}] [PID #{Process.pid}] Skipping announcement - too soon since last one (#{time_since_last}s ago)"
+              return
+            end
+          end
           
           events = Event.next_24_hours
           
@@ -142,6 +158,8 @@ module Bot
               )
             end
           end
+          
+          File.write(last_announcement_file, current_time.to_i.to_s)
           
           puts "[#{current_time}] [PID #{Process.pid}] Daily announcement sent successfully"
         rescue => e
