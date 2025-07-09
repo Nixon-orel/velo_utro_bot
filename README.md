@@ -84,7 +84,7 @@ STATIC_EVENTS=Встреча,Обсуждение
 
 # Daily Announcement Settings
 DAILY_ANNOUNCEMENT_ENABLED=true
-DAILY_ANNOUNCEMENT_TIME=08:00
+DAILY_ANNOUNCEMENT_TIME=18:30  # UTC время (21:30 Moscow Time)
 TIMEZONE=Europe/Moscow
 ```
 
