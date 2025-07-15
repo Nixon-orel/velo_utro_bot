@@ -208,7 +208,7 @@ velo_utro_bot/
 
 https://github.com/Nixon-orel
 
-TG: @nixonicus
+TG: @nixon_tut
 
 ## Идея и основная логика
 
