@@ -23,13 +23,12 @@ module Bot
             
             puts "[PID #{Process.pid}] Starting daily announcement scheduler"
             puts "[PID #{Process.pid}] UTC time: #{time}"
-            puts "[PID #{Process.pid}] Schedule: every minute, trigger at #{hour}:#{minute.to_s.rjust(2, '0')} UTC"
             
-            @@global_job = @@global_scheduler.every '1m' do
-              current_time = Time.now.utc
-              if current_time.hour == hour && current_time.min == minute
-                send_daily_announcement(bot)
-              end
+            cron_expression = "#{minute} #{hour} * * *"
+            puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
+            
+            @@global_job = @@global_scheduler.cron cron_expression do
+              send_daily_announcement(bot)
             end
             
             puts "[PID #{Process.pid}] Daily announcement scheduler started successfully"
