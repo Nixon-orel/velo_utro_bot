@@ -45,13 +45,24 @@ module Bot
       
       def self.status
         @@mutex.synchronize do
-          job_active = @@global_job && @@global_job.respond_to?(:next_time)
+          job_active = !@@global_job.nil?
+          next_run = nil
+          cron_expression = nil
+          
+          if job_active
+            begin
+              next_run = @@global_job.next_time if @@global_job.respond_to?(:next_time)
+              cron_expression = @@global_job.original if @@global_job.respond_to?(:original)
+            rescue => e
+              puts "[PID #{Process.pid}] Error getting job status: #{e.message}"
+            end
+          end
           
           {
             scheduler_running: @@global_scheduler && !@@global_scheduler.down?,
             job_active: job_active,
-            next_run: job_active ? @@global_job.next_time : nil,
-            cron_expression: job_active ? @@global_job.original : nil,
+            next_run: next_run,
+            cron_expression: cron_expression,
             jobs_count: @@global_scheduler&.jobs&.count || 0,
             lock_file_exists: File.exist?(LOCK_FILE_PATH)
           }
