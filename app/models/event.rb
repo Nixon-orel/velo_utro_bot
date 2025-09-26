@@ -51,7 +51,6 @@ class Event < ActiveRecord::Base
   
   def self.next_24_hours
     timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
-    tz = ActiveSupport::TimeZone[timezone]
     now = Time.now.in_time_zone(timezone)
     end_time = now + 24.hours
     
@@ -66,7 +65,7 @@ class Event < ActiveRecord::Base
       
       date_events.each do |event|
         begin
-          event_datetime = tz.parse("#{event.date} #{event.time}")
+          event_datetime = Time.parse("#{event.date} #{event.time}").in_time_zone(timezone)
           puts "Event: #{event.event_type} at #{event_datetime} (from #{event.date} #{event.time}), now: #{now}, end: #{end_time}"
           puts "Conditions: >= now: #{event_datetime >= now}, <= end: #{event_datetime <= end_time}"
           

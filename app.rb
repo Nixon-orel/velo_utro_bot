@@ -21,6 +21,7 @@ require_relative 'app/bot/helpers/formatter'
 require_relative 'app/bot/helpers/notifier'
 require_relative 'app/bot/helpers/calendar'
 require_relative 'app/bot/helpers/scheduler'
+require_relative 'app/bot/helpers/statistics'
 require_relative 'app/bot/base_handler'
 require_relative 'app/bot/command_handler'
 require_relative 'app/bot/callback_handler'
@@ -98,7 +99,8 @@ def run_bot
         { command: 'create', description: 'Создать новое мероприятие' },
         { command: 'find', description: 'Найти мероприятие' },
         { command: 'my_events', description: 'Мои мероприятия' },
-        { command: 'help', description: 'Справка по использованию' }
+        { command: 'help', description: 'Справка по использованию' },
+        { command: 'statistics', description: 'Статистика за месяц (админ)' }
       ]
       
       bot.api.set_my_commands(commands: commands)

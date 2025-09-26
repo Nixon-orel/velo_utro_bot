@@ -12,7 +12,12 @@ module Bot
       def process
         return unless @callback.message.chat.type == 'private'
         user = User.find_or_create_from_telegram(@callback.from)
-        events = user.events_as_participant.order(date: :desc)
+        
+        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
+        today = Time.now.in_time_zone(timezone).to_date
+        events = user.events_as_participant
+                     .where('date >= ?', today)
+                     .order(date: :asc, time: :asc)
         
         @bot.api.delete_message(
           chat_id: @chat_id,

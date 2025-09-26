@@ -18,20 +18,37 @@ module Bot
             
             @@global_scheduler = Rufus::Scheduler.new
             
-            time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
-            hour, minute = time.split(':').map(&:to_i)
-            
-            puts "[PID #{Process.pid}] Starting daily announcement scheduler"
-            puts "[PID #{Process.pid}] UTC time: #{time}"
-            
-            cron_expression = "#{minute} #{hour} * * *"
-            puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
-            
-            @@global_job = @@global_scheduler.cron cron_expression do
-              send_daily_announcement(bot)
+            if CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
+              time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
+              hour, minute = time.split(':').map(&:to_i)
+              
+              puts "[PID #{Process.pid}] Starting daily announcement scheduler"
+              puts "[PID #{Process.pid}] UTC time: #{time}"
+              
+              cron_expression = "#{minute} #{hour} * * *"
+              puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
+              
+              @@global_job = @@global_scheduler.cron cron_expression do
+                send_daily_announcement(bot)
+              end
             end
             
-            puts "[PID #{Process.pid}] Daily announcement scheduler started successfully"
+            if ENV['MONTHLY_STATS_DAY']
+              stats_day = ENV['MONTHLY_STATS_DAY'].to_i
+              stats_day = 28 if stats_day > 28
+              stats_day = 1 if stats_day < 1
+              
+              puts "[PID #{Process.pid}] Starting monthly statistics scheduler for day #{stats_day}"
+              
+              stats_cron = "0 9 #{stats_day} * *"
+              puts "[PID #{Process.pid}] Statistics cron expression: #{stats_cron}"
+              
+              @@global_scheduler.cron stats_cron do
+                send_monthly_statistics(bot)
+              end
+            end
+            
+            puts "[PID #{Process.pid}] Scheduler started successfully"
           else
             puts "[PID #{Process.pid}] Another scheduler instance is already running, skipping..."
           end
@@ -181,6 +198,34 @@ module Bot
         rescue => e
           current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
           puts "[#{current_time}] [PID #{Process.pid}] Error sending daily announcement: #{e.message}"
+          puts e.backtrace.join("\n")
+        end
+      end
+      
+      def self.send_monthly_statistics(bot)
+        begin
+          current_time = Time.now.utc
+          puts "[#{current_time}] [PID #{Process.pid}] Sending monthly statistics..."
+          
+          last_stats_file = '/tmp/velo_utro_bot_last_monthly_stats'
+          current_month = "#{Date.today.year}-#{Date.today.month}"
+          
+          if File.exist?(last_stats_file)
+            last_stats_month = File.read(last_stats_file).strip
+            if last_stats_month == current_month
+              puts "[#{current_time}] [PID #{Process.pid}] Statistics for #{current_month} already sent"
+              return
+            end
+          end
+          
+          statistics = Bot::Helpers::Statistics.new(bot)
+          statistics.send_monthly_report
+          
+          File.write(last_stats_file, current_month)
+          
+          puts "[#{current_time}] [PID #{Process.pid}] Monthly statistics sent successfully"
+        rescue => e
+          puts "[#{current_time}] [PID #{Process.pid}] Error sending monthly statistics: #{e.message}"
           puts e.backtrace.join("\n")
         end
       end
