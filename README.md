@@ -253,7 +253,7 @@ https://github.com/Nixon-orel
 
 TG: @nixon_tut
 
-## Идея и основная логика
+## Идея и базовая логика
 
 https://github.com/tulaman/sport-event-bot
 
