@@ -34,6 +34,15 @@ module Bot
           else
             events.each_with_index do |event, index|
               message = Bot::Helpers::Formatter.event_info(event)
+              
+              if event.weather_data.present? && ENV['WEATHER_ENABLED'] == 'true'
+                require_relative '../../services/weather_recommendations'
+                recommendations = WeatherRecommendations.generate(event.weather_data)
+                if recommendations && !recommendations.empty?
+                  message += "\n\n💡 <b>Рекомендации:</b>\n#{recommendations}"
+                end
+              end
+              
               buttons = []
               
               if index == events.length - 1

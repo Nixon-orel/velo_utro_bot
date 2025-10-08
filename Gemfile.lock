@@ -156,6 +156,7 @@ DEPENDENCIES
   activerecord
   database_cleaner-active_record
   dotenv
+  faraday
   i18n
   json
   mustache

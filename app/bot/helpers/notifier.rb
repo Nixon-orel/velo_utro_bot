@@ -31,6 +31,7 @@ module Bot
       def notify_channel_about_change(event, template_key, params = {})
         channel_id = CONFIG['PUBLIC_CHANNEL_ID']
         return unless channel_id
+        return unless event.published
         
         vars = build_event_vars(event, params)
         notification = render_template(template_key, vars)
