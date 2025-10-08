@@ -20,7 +20,6 @@ module Bot
           total_events: count_created_events(events),
           bike_events: count_bike_events(events),
           other_events: count_other_events_by_type(events),
-          cancelled_events: count_cancelled_events(start_date, end_date),
           total_kilometers: calculate_total_distance(events),
           top_organizer: find_top_organizer(events),
           most_active_participant: find_most_active_participant(events)
@@ -43,18 +42,14 @@ module Bot
           end
         end
         
-        if data[:cancelled_events] > 0
-          report << "\n❌ Событий отменено: <b>#{data[:cancelled_events]}</b>"
-        end
-        
         if data[:top_organizer]
           report << "\n🎉 Главный массовик-затейник месяца:"
-          report << "  @#{data[:top_organizer][:nickname]} (создал #{data[:top_organizer][:count]} #{pluralize_events(data[:top_organizer][:count])})"
+          report << "  @#{data[:top_organizer][:nickname]} (создано #{data[:top_organizer][:count]} #{pluralize_events(data[:top_organizer][:count])})"
         end
         
         if data[:most_active_participant]
           report << "\n💫 Душа компании месяца:"
-          report << "  @#{data[:most_active_participant][:nickname]} (участвовал в #{data[:most_active_participant][:count]} #{pluralize_events(data[:most_active_participant][:count])})"
+          report << "  @#{data[:most_active_participant][:nickname]} (участвовал(а) в #{data[:most_active_participant][:count]} #{pluralize_events(data[:most_active_participant][:count])})"
         end
         
         report << "\n\n💪 Присоединяйтесь к нашему дружному сообществу пользователей бота!"
@@ -94,10 +89,6 @@ module Bot
               .transform_values(&:count)
               .sort_by { |_, count| -count }
               .to_h
-      end
-      
-      def count_cancelled_events(start_date, end_date)
-        return 0
       end
       
       def calculate_total_distance(events)

@@ -51,29 +51,39 @@ class Event < ActiveRecord::Base
   
   def self.next_24_hours
     timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
-    now = Time.now.in_time_zone(timezone)
-    end_time = now + 24.hours
+    tz = ActiveSupport::TimeZone[timezone]
     
-    puts "Looking for events between #{now} and #{end_time}"
+    now_utc = Time.now.utc
+    end_time_utc = now_utc + 24.hours
+    now_local = now_utc.in_time_zone(timezone)
+    end_time_local = end_time_utc.in_time_zone(timezone)
+    
+    puts "Looking for events between #{now_local} (#{now_utc} UTC) and #{end_time_local} (#{end_time_utc} UTC)"
     
     events = []
     
-    (now.to_date..end_time.to_date).each do |date|
+    start_date = now_utc.to_date - 1.day
+    end_date = end_time_utc.to_date + 1.day
+    
+    (start_date..end_date).each do |date|
       puts "Checking date: #{date}"
       date_events = where(date: date).order(:time)
       puts "Found #{date_events.count} events on #{date}"
       
       date_events.each do |event|
         begin
-          event_datetime = Time.parse("#{event.date} #{event.time}").in_time_zone(timezone)
-          puts "Event: #{event.event_type} at #{event_datetime} (from #{event.date} #{event.time}), now: #{now}, end: #{end_time}"
-          puts "Conditions: >= now: #{event_datetime >= now}, <= end: #{event_datetime <= end_time}"
+          event_datetime_local = tz.parse("#{event.date} #{event.time}")
+          event_datetime_utc = event_datetime_local.utc
           
-          if event_datetime >= now && event_datetime <= end_time
-            puts "Adding event to list"
+          puts "Event: #{event.event_type} at #{event_datetime_local} local (#{event_datetime_utc} UTC) from input '#{event.date} #{event.time}'"
+          puts "Comparing UTC times: event #{event_datetime_utc} >= now #{now_utc}: #{event_datetime_utc >= now_utc}"
+          puts "Comparing UTC times: event #{event_datetime_utc} <= end #{end_time_utc}: #{event_datetime_utc <= end_time_utc}"
+          
+          if event_datetime_utc >= now_utc && event_datetime_utc <= end_time_utc
+            puts "Adding event to list (UTC comparison passed)"
             events << event
           else
-            puts "Event does not match time criteria"
+            puts "Event does not match UTC time criteria"
           end
         rescue => e
           puts "Error parsing event time: #{e.message} for event #{event.id} with time '#{event.time}'"
@@ -113,5 +123,46 @@ class Event < ActiveRecord::Base
     else
       nil
     end
+  end
+  
+  def weather
+    weather_data || {}
+  end
+  
+  def weather_changed_significantly?(new_weather)
+    return true if weather.empty?
+    
+    old_weather = weather
+    
+    temp_changed = (new_weather['temp_c'].to_f - old_weather['temp_c'].to_f).abs > 5
+    
+    old_precip = old_weather['precip_prob'].to_i > 50
+    new_precip = new_weather['precip_prob'].to_i > 50
+    precip_changed = old_precip != new_precip
+    
+    wind_changed = (new_weather['wind_kph'].to_f - old_weather['wind_kph'].to_f).abs > 10
+    
+    alerts_appeared = !new_weather['alerts'].to_a.empty? && old_weather['alerts'].to_a.empty?
+    
+    temp_changed || precip_changed || wind_changed || alerts_appeared
+  end
+  
+  def update_weather_data(new_data)
+    if weather_data.present?
+      history = weather_history || []
+      history << {
+        timestamp: Time.current,
+        weather_data: weather_data
+      }
+      self.weather_history = history
+    end
+    
+    self.weather_data = new_data
+    self.weather_updated_at = Time.current
+    save!
+  end
+  
+  def weather_city_or_default
+    weather_city.presence || ENV['DEFAULT_WEATHER_CITY'] || 'Orel'
   end
 end

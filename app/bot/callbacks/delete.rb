@@ -53,12 +53,15 @@ module Bot
       def notify_channel_about_deletion(event)
         channel_id = CONFIG['PUBLIC_CHANNEL_ID']
         return unless channel_id
-        event_datetime = DateTime.parse("#{event.date} #{event.time}")
-        return if event_datetime < DateTime.now
+        return unless event.published
+        
+        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
+        tz = ActiveSupport::TimeZone[timezone]
+        event_datetime = tz.parse("#{event.date} #{event.time}")
+        return if event_datetime.utc < Time.now.utc
         
         notifier = Bot::Helpers::Notifier.new(@bot)
         notifier.notify_channel_about_change(event, 'event_deleted_channel_notification')
-        return
         
       rescue => e
         puts "Error notifying channel about event deletion: #{e.message}"

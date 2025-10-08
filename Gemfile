@@ -19,6 +19,7 @@ gem 'i18n'
 gem 'rufus-scheduler'
 gem 'json'
 gem 'yaml'
+gem 'faraday'
 
 group :development do
   gem 'pry'

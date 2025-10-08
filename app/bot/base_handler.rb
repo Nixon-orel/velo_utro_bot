@@ -33,47 +33,27 @@ module Bot
     end
     
     def get_user(message)
-      user_id = nil
+      user_data = extract_user_data(message)
+      return nil unless user_data
       
-      if message.respond_to?(:from)
-        user_id = message.from.id.to_s
-      elsif message.respond_to?(:message) && message.message.respond_to?(:from)
-        user_id = message.message.from.id.to_s
-      end
-      
-      return nil unless user_id
-      
-      User.find_or_create_from_telegram(OpenStruct.new(
-        id: user_id,
-        first_name: get_first_name(message),
-        username: get_username(message)
-      ))
+      User.find_or_create_from_telegram(OpenStruct.new(user_data))
     end
     
-    def get_first_name(message)
-      first_name = nil
+    def extract_user_data(message)
+      from_obj = get_from_object(message)
+      return nil unless from_obj&.respond_to?(:id)
       
-      if message.respond_to?(:from) && message.from.respond_to?(:first_name)
-        first_name = message.from.first_name
-      elsif message.respond_to?(:message) &&
-            message.message.respond_to?(:from) &&
-            message.message.from.respond_to?(:first_name)
-        first_name = message.message.from.first_name
-      end
-      
-      first_name.presence || nil
+      {
+        id: from_obj.id.to_s,
+        first_name: from_obj.respond_to?(:first_name) ? from_obj.first_name : nil,
+        username: from_obj.respond_to?(:username) ? from_obj.username : nil
+      }
     end
     
-    def get_username(message)
-      if message.respond_to?(:from) && message.from.respond_to?(:username)
-        message.from.username
-      elsif message.respond_to?(:message) &&
-            message.message.respond_to?(:from) &&
-            message.message.from.respond_to?(:username)
-        message.message.from.username
-      else
-        nil
-      end
+    def get_from_object(message)
+      return message.from if message.respond_to?(:from)
+      return message.message.from if message.respond_to?(:message) && message.message&.respond_to?(:from)
+      nil
     end
     
     def create_button(text, callback_data)
@@ -92,6 +72,48 @@ module Bot
     
     def create_keyboard(buttons)
       Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
+    end
+    
+    def create_reply_keyboard(buttons, options = {})
+      keyboard_buttons = buttons.map do |row|
+        row.map do |text|
+          Telegram::Bot::Types::KeyboardButton.new(text: text)
+        end
+      end
+      
+      default_options = {
+        keyboard: keyboard_buttons,
+        resize_keyboard: true,
+        one_time_keyboard: false
+      }
+      
+      Telegram::Bot::Types::ReplyKeyboardMarkup.new(default_options.merge(options))
+    end
+    
+    def remove_reply_keyboard
+      Telegram::Bot::Types::ReplyKeyboardRemove.new(remove_keyboard: true)
+    end
+    
+    def create_find_buttons
+      [
+        [create_button(I18n.t('buttons.find_today'), 'find_today')],
+        [create_button(I18n.t('buttons.find_tomorrow'), 'find_tomorrow')],
+        [create_button(I18n.t('buttons.find_week'), 'find_week')],
+        [create_button(I18n.t('buttons.find_date'), 'find_date')],
+        [create_button(I18n.t('buttons.find_all'), 'find_all')]
+      ]
+    end
+    
+    def create_my_events_buttons
+      [
+        [create_button(I18n.t('i_m_author'), 'imauthor')],
+        [create_button(I18n.t('i_m_participant'), 'imparticipant')]
+      ]
+    end
+    
+    def send_button_message(text, buttons, options = {})
+      markup = create_keyboard(buttons)
+      send_message(text, { reply_markup: markup }.merge(options))
     end
     
     def send_message(text, options = {})

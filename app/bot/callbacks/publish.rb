@@ -10,7 +10,13 @@ module Bot
           return
         end
         
+        if event.published
+          answer_callback_query("Событие уже опубликовано", show_alert: true)
+          return
+        end
+        
         publish_to_channel(event)
+        event.update(published: true)
         
         answer_callback_query(I18n.t('event_published'))
       end

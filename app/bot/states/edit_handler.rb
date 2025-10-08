@@ -21,6 +21,10 @@ module Bot
           notify_about_change(event, notification_key, processed_value)
         end
         
+        if should_reschedule_weather?(field, event)
+          reschedule_weather_updates(event)
+        end
+        
         reset_edit_state
         send_confirmation(saved_key)
       end
@@ -31,6 +35,18 @@ module Bot
       
       def should_notify?(new_value, old_value)
         new_value && new_value != old_value
+      end
+      
+      def should_reschedule_weather?(field, event)
+        (field == :time || field == :date) &&
+        event.weather_data.present? &&
+        ENV['WEATHER_ENABLED'] == 'true'
+      end
+      
+      def reschedule_weather_updates(event)
+        require_relative '../helpers/weather_scheduler'
+        Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
+        puts "[EditHandler] Rescheduled weather updates for event #{event.id}"
       end
       
       private

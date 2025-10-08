@@ -19,8 +19,10 @@ Dir[File.join(File.dirname(__FILE__), 'app', 'models', '*.rb')].each { |file| re
 
 require_relative 'app/bot/helpers/formatter'
 require_relative 'app/bot/helpers/notifier'
+require_relative 'app/bot/helpers/weather_notifier'
 require_relative 'app/bot/helpers/calendar'
 require_relative 'app/bot/helpers/scheduler'
+require_relative 'app/bot/helpers/weather_scheduler'
 require_relative 'app/bot/helpers/statistics'
 require_relative 'app/bot/base_handler'
 require_relative 'app/bot/command_handler'
@@ -110,16 +112,19 @@ def run_bot
     end
     
     Bot::Helpers::Scheduler.start(bot)
+    Bot::Helpers::WeatherScheduler.start
     
     Signal.trap('INT') do
       puts "\nShutting down..."
       Bot::Helpers::Scheduler.stop
+      Bot::Helpers::WeatherScheduler.stop
       exit
     end
     
     Signal.trap('TERM') do
       puts "\nShutting down..."
       Bot::Helpers::Scheduler.stop
+      Bot::Helpers::WeatherScheduler.stop
       exit
     end
     
@@ -185,6 +190,11 @@ def run_bot
                   notifier = Bot::Helpers::Notifier.new(bot)
                   notifier.notify_participants(event, 'date_changed_notification', { new_date: new_date })
                   notifier.notify_channel_about_change(event, 'date_changed_channel_notification', { new_date: new_date })
+                  
+                  if event.weather_data.present? && ENV['WEATHER_ENABLED'] == 'true'
+                    Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
+                    puts "[Calendar] Rescheduled weather updates for event #{event.id}"
+                  end
                   
                   session.state = nil
                   session.edit_event_id = nil
