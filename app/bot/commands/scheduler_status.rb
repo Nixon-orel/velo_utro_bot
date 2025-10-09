@@ -8,37 +8,41 @@ module Bot
         return unless user.admin?
         
         status_info = []
-        status_info << "🤖 <b>Статус планировщика:</b>"
+        status_info << "🤖 Статус планировщика:"
         status_info << ""
         
       
         status = Bot::Helpers::Scheduler.status
         
         if status[:scheduler_running]
-          status_info << "📅 Планировщик: <b>Запущен</b>"
-          status_info << "🔧 Состояние: <b>Активен</b>"
+          status_info << "📅 Планировщик: Запущен"
+          status_info << "🔧 Состояние: Активен"
           status_info << "📊 Количество задач: #{status[:jobs_count]}"
           
-          if status[:job_active] && status[:next_run]
-            status_info << "⏰ Задача анонсов: <b>Активна</b>"
-            status_info << "🕐 Следующий запуск: #{status[:next_run]}"
+          if status[:job_active]
+            status_info << "⏰ Задача анонсов: Активна"
+            if status[:next_run]
+              status_info << "🕐 Следующий запуск: #{status[:next_run]}"
+            else
+              status_info << "🕐 Следующий запуск: Не определен"
+            end
             status_info << "📝 Cron выражение: #{status[:cron_expression] || 'Неизвестно'}"
           else
-            status_info << "⏰ Задача анонсов: <b>Не найдена или неактивна</b>"
+            status_info << "⏰ Задача анонсов: Не найдена или неактивна"
           end
         else
-          status_info << "📅 Планировщик: <b>Не запущен</b>"
+          status_info << "📅 Планировщик: Не запущен"
         end
         
         status_info << "🔒 Файл блокировки: #{status[:lock_file_exists] ? 'Существует' : 'Отсутствует'}"
         
         status_info << ""
-        status_info << "⚙️ <b>Настройки:</b>"
+        status_info << "⚙️ Настройки:"
         status_info << "🔔 Анонсы включены: #{CONFIG['DAILY_ANNOUNCEMENT_ENABLED']}"
         status_info << "🕐 Время анонсов: #{CONFIG['DAILY_ANNOUNCEMENT_TIME']}"
         status_info << "🌍 Часовой пояс: #{CONFIG['TIMEZONE']}"
         status_info << ""
-        status_info << "🆔 <b>Процесс:</b>"
+        status_info << "🆔 Процесс:"
         status_info << "🔢 PID: #{Process.pid}"
         status_info << "⏱️ Время запуска: #{Time.at($PROGRAM_START_TIME || Time.now).strftime('%d.%m.%Y %H:%M:%S')}"
         

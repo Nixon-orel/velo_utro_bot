@@ -5,6 +5,7 @@ module Bot
     class Scheduler
       @@global_scheduler = nil
       @@global_job = nil
+      @@cron_expression = nil
       @@mutex = Mutex.new
       @@lock_file = nil
       LOCK_FILE_PATH = '/tmp/velo_utro_bot_scheduler.lock'
@@ -28,6 +29,7 @@ module Bot
               cron_expression = "#{minute} #{hour} * * *"
               puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
               
+              @@cron_expression = cron_expression
               @@global_job = @@global_scheduler.cron cron_expression do
                 send_daily_announcement(bot)
               end
@@ -48,7 +50,7 @@ module Bot
               end
             end
             
-            puts "[PID #{Process.pid}] Scheduler started successfully"
+            puts "[PID #{Process.pid}] Schedulers started successfully"
           else
             puts "[PID #{Process.pid}] Another scheduler instance is already running, skipping..."
           end
@@ -64,14 +66,12 @@ module Bot
         @@mutex.synchronize do
           job_active = !@@global_job.nil?
           next_run = nil
-          cron_expression = nil
           
-          if job_active
+          if job_active && @@cron_expression
             begin
-              next_run = @@global_job.next_time if @@global_job.respond_to?(:next_time)
-              cron_expression = @@global_job.original if @@global_job.respond_to?(:original)
+              next_run = calculate_next_run(@@cron_expression)
             rescue => e
-              puts "[PID #{Process.pid}] Error getting job status: #{e.message}"
+              puts "[PID #{Process.pid}] Error calculating next run: #{e.message}"
             end
           end
           
@@ -79,7 +79,7 @@ module Bot
             scheduler_running: @@global_scheduler && !@@global_scheduler.down?,
             job_active: job_active,
             next_run: next_run,
-            cron_expression: cron_expression,
+            cron_expression: @@cron_expression,
             jobs_count: @@global_scheduler&.jobs&.count || 0,
             lock_file_exists: File.exist?(LOCK_FILE_PATH)
           }
@@ -232,3 +232,27 @@ module Bot
     end
   end
 end
+
+      private
+
+      def self.calculate_next_run(cron_expression)
+        return nil unless cron_expression
+
+        parts = cron_expression.split(' ')
+        return nil if parts.length < 5
+
+        minute = parts[0].to_i
+        hour = parts[1].to_i
+        
+        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
+        tz = ActiveSupport::TimeZone[timezone]
+        now = tz.now
+
+        next_run = tz.local(now.year, now.month, now.day, hour, minute)
+        
+        if next_run <= now
+          next_run += 1.day
+        end
+
+        next_run
+      end
