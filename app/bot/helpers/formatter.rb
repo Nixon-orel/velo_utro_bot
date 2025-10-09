@@ -109,7 +109,7 @@ module Bot
         recommendations = WeatherRecommendations.generate(weather_data, nil)
         
         if recommendations.any?
-          weather_text += "\n\n⚡ Рекомендации для велопоездки:"
+          weather_text += "\n\n⚡ Рекомендации:"
           recommendations.first(4).each { |rec| weather_text += "\n• #{rec}" }
         end
         

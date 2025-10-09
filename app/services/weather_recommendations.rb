@@ -52,7 +52,6 @@ class WeatherRecommendations
     
     if precip_prob > 70 || precip_mm > 0.5
       recommendations << "☔ Дождевик обязателен"
-      recommendations << "🌊 Крылья защитят от брызг"
       recommendations << "⚠️ Осторожно на поворотах и спусках"
     elsif precip_prob > 30
       recommendations << "☔ Возьмите дождевик на всякий случай"

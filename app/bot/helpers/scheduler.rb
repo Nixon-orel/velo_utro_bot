@@ -163,7 +163,7 @@ module Bot
             end
           end
           
-          events = Event.next_24_hours.where(published: true)
+          events = Event.next_24_hours.select(&:published)
           
           channel_id = CONFIG['PUBLIC_CHANNEL_ID']
           return unless channel_id
