@@ -84,18 +84,26 @@ def run_bot
     puts "Bot started"
     
     begin
-      bot.api.set_chat_menu_button(
-        menu_button: {
-          type: 'commands'
-        }
+      group_commands = [
+        { command: 'start', description: 'Начать работу с ботом' },
+        { command: 'menu', description: 'Показать главное меню' },
+        { command: 'create', description: 'Создать новое мероприятие' },
+        { command: 'find', description: 'Найти мероприятие' },
+        { command: 'my_events', description: 'Мои мероприятия' },
+        { command: 'help', description: 'Справка по использованию' }
+      ]
+      
+      bot.api.set_my_commands(
+        commands: group_commands,
+        scope: { type: 'all_group_chats' }
       )
-      puts "Menu button set successfully"
+      puts "Group commands set (redirect to private)"
     rescue => e
-      puts "Failed to set menu button: #{e.message}"
+      puts "Failed to set group commands: #{e.message}"
     end
-    
+
     begin
-      commands = [
+      private_commands = [
         { command: 'start', description: 'Начать работу с ботом' },
         { command: 'menu', description: 'Показать главное меню' },
         { command: 'create', description: 'Создать новое мероприятие' },
@@ -105,10 +113,33 @@ def run_bot
         { command: 'statistics', description: 'Статистика за месяц (админ)' }
       ]
       
-      bot.api.set_my_commands(commands: commands)
-      puts "Bot commands set successfully"
+      bot.api.set_my_commands(
+        commands: private_commands,
+        scope: { type: 'all_private_chats' }
+      )
+      puts "Private commands set (full functionality)"
     rescue => e
-      puts "Failed to set bot commands: #{e.message}"
+      puts "Failed to set private commands: #{e.message}"
+    end
+
+    begin
+      bot.api.set_chat_menu_button(
+        menu_button: { type: 'commands' },
+        scope: { type: 'all_group_chats' }
+      )
+      puts "Group menu button enabled"
+    rescue => e
+      puts "Failed to enable group menu button: #{e.message}"
+    end
+
+    begin
+      bot.api.set_chat_menu_button(
+        menu_button: { type: 'commands' },
+        scope: { type: 'all_private_chats' }
+      )
+      puts "Private menu button enabled"
+    rescue => e
+      puts "Failed to enable private menu button: #{e.message}"
     end
     
     Bot::Helpers::Scheduler.start(bot)
@@ -137,9 +168,32 @@ def run_bot
           session = Session.load(user_id)
           
           if message.text&.start_with?('/')
-            next unless message.chat.type == 'private'
             command = message.text.split(' ').first[1..-1].split('@').first
-            Bot::Commands.execute(command, bot, message, session)
+            
+            if message.chat.type == 'private'
+              Bot::Commands.execute(command, bot, message, session)
+            else
+              bot_username = ENV['BOT_USERNAME']
+              if bot_username && !bot_username.empty?
+                bot.api.send_message(
+                  chat_id: message.chat.id,
+                  text: "Для использования команд бота перейдите в личные сообщения:",
+                  reply_markup: Telegram::Bot::Types::InlineKeyboardMarkup.new(
+                    inline_keyboard: [[
+                      Telegram::Bot::Types::InlineKeyboardButton.new(
+                        text: "💬 Открыть чат с ботом",
+                        url: "https://t.me/#{bot_username}?start=#{command}"
+                      )
+                    ]]
+                  )
+                )
+              else
+                bot.api.send_message(
+                  chat_id: message.chat.id,
+                  text: "Для использования команд бота перейдите в личные сообщения с @#{bot.api.get_me['result']['username']}"
+                )
+              end
+            end
           elsif session.state
             next unless message.chat.type == 'private'
             Bot::States.process(session.state, bot, message, session)
