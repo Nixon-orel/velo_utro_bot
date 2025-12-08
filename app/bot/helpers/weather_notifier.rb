@@ -1,6 +1,18 @@
 module Bot
   module Helpers
     class WeatherNotifier
+      def self.handle_3d_weather_update(event, old_weather, new_weather)
+        return unless event && new_weather
+        
+        if old_weather && old_weather['is_fallback']
+          send_accurate_weather_update(event, old_weather, new_weather)
+        elsif weather_changed_critically?(old_weather, new_weather)
+          send_critical_weather_alerts(event, old_weather, new_weather)
+        else
+          update_event_message_silently(event, new_weather)
+        end
+      end
+      
       def self.handle_24h_weather_update(event, old_weather, new_weather)
         return unless event && new_weather
         
@@ -50,6 +62,26 @@ module Bot
         event.save
         
         puts "[WeatherNotifier] Critical weather alerts sent for event #{event.id}"
+      end
+      
+      def self.send_accurate_weather_update(event, old_weather, new_weather)
+        require_relative '../../services/weather_recommendations'
+        
+        message = format_accurate_weather_message(event, old_weather, new_weather)
+        
+        all_users = ([event.author] + event.participants).uniq
+        all_users.each do |user|
+          send_message_to_user(user, message)
+        end
+        
+        # Обновляем сообщение в канале с точными данными
+        update_event_message_silently(event, new_weather)
+        
+        event.weather_alerts_sent ||= {}
+        event.weather_alerts_sent['3d_accurate'] = Time.current.to_s
+        event.save
+        
+        puts "[WeatherNotifier] Accurate weather update sent for event #{event.id}"
       end
       
       def self.update_event_message_silently(event, new_weather)
@@ -143,6 +175,43 @@ module Bot
         
         if recommendations.any?
           message += "\n\n#{I18n.t('weather.recommendations')}:"
+          recommendations.first(4).each { |rec| message += "\n• #{rec}" }
+        end
+        
+        message
+      end
+      
+      def self.format_accurate_weather_message(event, old_weather, new_weather)
+        require_relative '../../services/weather_recommendations'
+        
+        recommendations = WeatherRecommendations.generate(new_weather, event.time)
+        
+        message = I18n.t('weather.accurate_update_header',
+          event_type: event.event_type,
+          date: event.formatted_date,
+          time: event.formatted_time
+        )
+        
+        fallback_date = old_weather['fallback_from'] || 'неизвестной даты'
+        message += "\n\n📅 Ранее: приблизительный прогноз (данные за #{fallback_date})"
+        
+        new_condition = new_weather['condition']
+        new_temp = new_weather['temp_c']
+        new_wind = new_weather['wind_kph']
+        new_precip = new_weather['precip_prob']
+        
+        message += "\n🎯 Сейчас: точный прогноз - #{new_condition}, #{new_temp}°C"
+        
+        if new_wind && new_wind > 10
+          message += ", ветер #{new_wind} км/ч"
+        end
+        
+        if new_precip && new_precip > 30
+          message += ", осадки #{new_precip}%"
+        end
+        
+        if recommendations.any?
+          message += "\n\n⚡ Рекомендации:"
           recommendations.first(4).each { |rec| message += "\n• #{rec}" }
         end
         

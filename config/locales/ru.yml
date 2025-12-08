@@ -566,3 +566,30 @@ ru:
     {{#event.channel_link}}
     🔗 <a href="{{event.channel_link}}">Ссылка на событие</a>
     {{/event.channel_link}}
+
+  # Специальные погодные уведомления
+  weather:
+    accurate_update_header: |
+      🎯 <b>Получен точный прогноз погоды!</b>
+      
+      Для мероприятия <b>{{event_type}}</b>
+      📅 {{date}} в {{time}}
+    
+    critical_change_header: |
+      ⚠️ <b>Критическое изменение прогноза!</b>
+      
+      Для мероприятия <b>{{event_type}}</b>
+      📅 {{date}} в {{time}}
+    
+    channel_forecast_message: |
+      🌤️ <b>Финальный прогноз погоды</b>
+      
+      Для мероприятия <b>{{event_type}}</b>
+      📅 {{date}} в {{time}}
+      📍 {{location}}
+      
+      {{weather_info}}
+    
+    was: "Было"
+    became: "Стало"
+    recommendations: "Рекомендации"

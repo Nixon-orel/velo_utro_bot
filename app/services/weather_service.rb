@@ -75,10 +75,19 @@ class WeatherService
     event_hour = event_time.split(':')[0].to_i
     
     forecast_day = data['forecast']['forecastday'].find { |day| day['date'] == event_date_str }
-    return nil unless forecast_day
+    unless forecast_day
+      forecast_day = data['forecast']['forecastday'].last
+      return nil unless forecast_day
+      log_warning("Using fallback weather data for date outside forecast range", {
+        requested_date: event_date_str,
+        fallback_date: forecast_day['date'],
+        available_days: data['forecast']['forecastday'].map { |d| d['date'] }.join(', ')
+      })
+    end
     
     hourly_forecast = forecast_day['hour'].find { |hour| hour['time'].include?("#{event_hour.to_s.rjust(2, '0')}:") }
     hourly_forecast ||= forecast_day['hour'][event_hour] if forecast_day['hour'][event_hour]
+    is_fallback = forecast_day['date'] != event_date_str
     
     if hourly_forecast
       {
@@ -96,7 +105,9 @@ class WeatherService
         sunset: forecast_day['astro']['sunset'],
         alerts: data['alerts'] || [],
         forecast_date: event_date_str,
-        forecast_time: event_time
+        forecast_time: event_time,
+        is_fallback: is_fallback,
+        fallback_from: is_fallback ? forecast_day['date'] : nil
       }
     else
       day_data = forecast_day['day']
@@ -115,7 +126,9 @@ class WeatherService
         sunset: forecast_day['astro']['sunset'],
         alerts: data['alerts'] || [],
         forecast_date: event_date_str,
-        forecast_time: event_time
+        forecast_time: event_time,
+        is_fallback: is_fallback,
+        fallback_from: is_fallback ? forecast_day['date'] : nil
       }
     end
   end

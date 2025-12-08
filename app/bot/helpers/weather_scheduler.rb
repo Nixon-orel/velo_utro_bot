@@ -30,6 +30,7 @@ module Bot
         tz = ActiveSupport::TimeZone[timezone]
         event_datetime = tz.parse("#{event.date} #{event.time}")
         
+        schedule_3d_update(event, event_datetime)
         schedule_24h_update(event, event_datetime)
         schedule_2h_update(event, event_datetime)
       end
@@ -42,6 +43,17 @@ module Bot
           @@scheduler = nil
           puts "[WeatherScheduler] Stopped at #{Time.now}"
         end
+      end
+      
+      def self.schedule_3d_update(event, event_datetime)
+        update_time = event_datetime - 3.days
+        return if update_time.utc <= Time.now.utc
+        
+        @@scheduler.at update_time do
+          update_weather_3d_before(event.id)
+        end
+        
+        puts "[WeatherScheduler] Scheduled 3d update for event #{event.id} at #{update_time} (#{update_time.utc} UTC)"
       end
       
       def self.schedule_24h_update(event, event_datetime)
@@ -79,6 +91,19 @@ module Bot
         end
       end
       
+      def self.update_weather_3d_before(event_id)
+        begin
+          puts "[WeatherScheduler] Running 3d weather update for event #{event_id}"
+          
+          event = Event.find_by(id: event_id)
+          return unless event
+          
+          check_weather_changes(event, '3d')
+        rescue => e
+          puts "[WeatherScheduler] Error in 3d update for event #{event_id}: #{e.message}"
+        end
+      end
+      
       def self.update_weather_2h_before(event_id)
         begin
           puts "[WeatherScheduler] Running 2h weather update for event #{event_id}"
@@ -112,7 +137,9 @@ module Bot
         old_weather = event.weather
         
         begin
-          if update_type == '24h'
+          if update_type == '3d'
+            WeatherNotifier.handle_3d_weather_update(event, old_weather, new_weather)
+          elsif update_type == '24h'
             WeatherNotifier.handle_24h_weather_update(event, old_weather, new_weather)
           elsif update_type == '2h'
             WeatherNotifier.handle_2h_weather_update(event, new_weather)

@@ -69,11 +69,17 @@ class EventWeatherService
     condition = weather_data[:condition] || weather_data['condition']
     wind_speed = weather_data[:wind_kph] || weather_data['wind_kph']
     precip_prob = weather_data[:precip_prob] || weather_data['precip_prob']
+    is_fallback = weather_data[:is_fallback] || weather_data['is_fallback']
+    fallback_from = weather_data[:fallback_from] || weather_data['fallback_from']
     
     weather_text = if city_name == I18n.t('custom_coordinates')
       "🌤️ Погода по координатам:\n#{condition}, #{temp}°C"
     else
       "🌤️ Погода в г. #{city_name}:\n#{condition}, #{temp}°C"
+    end
+    
+    if is_fallback && fallback_from
+      weather_text += "\n⚠️ (приблизительно, данные за #{fallback_from})"
     end
     
     weather_text += " (ощущ. #{feels_like}°C)" if feels_like && feels_like != temp

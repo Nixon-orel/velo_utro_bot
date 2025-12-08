@@ -229,12 +229,7 @@ module Bot
           puts e.backtrace.join("\n")
         end
       end
-    end
-  end
-end
-
-      private
-
+      
       def self.calculate_next_run(cron_expression)
         return nil unless cron_expression
 
@@ -256,3 +251,6 @@ end
 
         next_run
       end
+    end
+  end
+end
