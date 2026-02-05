@@ -59,18 +59,32 @@ module Bot
       end
       
       def send_monthly_report
-        return unless @bot && ENV['PUBLIC_CHANNEL_ID']
+        unless @bot
+          puts "[Statistics] Bot instance is nil, cannot send report"
+          return
+        end
         
+        unless ENV['PUBLIC_CHANNEL_ID']
+          puts "[Statistics] PUBLIC_CHANNEL_ID is not set, cannot send report"
+          return
+        end
+        
+        puts "[Statistics] Generating monthly report..."
         data = monthly_report
+        
+        puts "[Statistics] Report data: bike_events=#{data[:bike_events]}, total_events=#{data[:total_events]}, period=#{data[:period]}"
         message = format_monthly_report(data)
         
+        puts "[Statistics] Sending report to channel #{ENV['PUBLIC_CHANNEL_ID']}"
         @bot.api.send_message(
           chat_id: ENV['PUBLIC_CHANNEL_ID'],
           text: message,
           parse_mode: 'HTML'
         )
+        puts "[Statistics] Monthly report sent successfully"
       rescue => e
-        puts "Error sending monthly statistics: #{e.message}"
+        puts "[Statistics] Error sending monthly statistics: #{e.message}"
+        puts e.backtrace.join("\n")
       end
       
       private

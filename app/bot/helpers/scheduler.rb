@@ -208,22 +208,25 @@ module Bot
           puts "[#{current_time}] [PID #{Process.pid}] Sending monthly statistics..."
           
           last_stats_file = '/tmp/velo_utro_bot_last_monthly_stats'
-          current_month = "#{Date.today.year}-#{Date.today.month}"
+          previous_month_date = Date.today - 1.month
+          stats_period = "#{previous_month_date.year}-#{previous_month_date.month}"
           
           if File.exist?(last_stats_file)
             last_stats_month = File.read(last_stats_file).strip
-            if last_stats_month == current_month
-              puts "[#{current_time}] [PID #{Process.pid}] Statistics for #{current_month} already sent"
+            if last_stats_month == stats_period
+              puts "[#{current_time}] [PID #{Process.pid}] Statistics for #{stats_period} already sent"
               return
             end
           end
           
+          puts "[#{current_time}] [PID #{Process.pid}] Generating statistics for period: #{stats_period}"
+          
           statistics = Bot::Helpers::Statistics.new(bot)
           statistics.send_monthly_report
           
-          File.write(last_stats_file, current_month)
+          File.write(last_stats_file, stats_period)
           
-          puts "[#{current_time}] [PID #{Process.pid}] Monthly statistics sent successfully"
+          puts "[#{current_time}] [PID #{Process.pid}] Monthly statistics for #{stats_period} sent successfully"
         rescue => e
           puts "[#{current_time}] [PID #{Process.pid}] Error sending monthly statistics: #{e.message}"
           puts e.backtrace.join("\n")
