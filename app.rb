@@ -109,6 +109,8 @@ def run_bot
         { command: 'create', description: 'Создать новое мероприятие' },
         { command: 'find', description: 'Найти мероприятие' },
         { command: 'my_events', description: 'Мои мероприятия' },
+        { command: 'subscribe', description: 'Подписаться на уведомления о событиях' },
+        { command: 'unsubscribe', description: 'Отписаться от уведомлений' },
         { command: 'help', description: 'Справка по использованию' },
         { command: 'statistics', description: 'Статистика за месяц (админ)' }
       ]

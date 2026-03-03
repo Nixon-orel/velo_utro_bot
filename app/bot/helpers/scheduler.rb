@@ -11,7 +11,7 @@ module Bot
       LOCK_FILE_PATH = '/tmp/velo_utro_bot_scheduler.lock'
       
       def self.start(bot)
-        return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
+        return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED'] || ENV['MONTHLY_STATS_DAY']
         
         @@mutex.synchronize do
           if acquire_lock

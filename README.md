@@ -89,7 +89,7 @@ DAILY_ANNOUNCEMENT_ENABLED=true
 DAILY_ANNOUNCEMENT_TIME=18:30  # UTC время (21:30 Moscow Time)
 
 # Monthly Statistics Settings
-MONTHLY_STATS_DAY=15  # день месяца для отправки статистики (1-28)
+MONTHLY_STATS_DAY=1  # день месяца для отправки статистики (1-28), отправка в 09:00 UTC
 
 # Timezone Settings
 TIMEZONE=Europe/Moscow
@@ -101,7 +101,29 @@ DEFAULT_WEATHER_COORDINATES=52.9651,36.0785
 DEFAULT_WEATHER_CITY_NAME=Орёл
 WEATHER_ADMIN_ALERTS=true
 WEATHER_DEBUG=false
+
+# Webhook Settings (optional, for production)
+WEBHOOK_DOMAIN=https://your-domain.com
 ```
+
+**Описание переменных окружения:**
+
+- `TG_TOKEN` - токен Telegram бота (получается от @BotFather)
+- `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` - настройки подключения к PostgreSQL
+- `PUBLIC_CHANNEL_ID` - ID публичного канала для анонсов (можно указать несколько через запятую)
+- `BOT_USERNAME` - имя пользователя бота без @ (например, VeloutroBot)
+- `ADMIN_IDS` - список Telegram ID администраторов через запятую
+- `STATIC_EVENTS` - типы статических мероприятий (без скорости/расстояния)
+- `DAILY_ANNOUNCEMENT_ENABLED` - включение ежедневных анонсов (true/false)
+- `DAILY_ANNOUNCEMENT_TIME` - время отправки анонсов в UTC (формат HH:MM)
+- `MONTHLY_STATS_DAY` - день месяца для автоматической отправки статистики (1-28)
+- `TIMEZONE` - часовой пояс приложения (по умолчанию Europe/Moscow)
+- `WEATHER_API_KEY` - ключ API для WeatherAPI (получить на https://www.weatherapi.com/)
+- `WEATHER_ENABLED` - включение функций погоды (true/false)
+- `DEFAULT_WEATHER_COORDINATES` - координаты по умолчанию (формат "широта,долгота")
+- `DEFAULT_WEATHER_CITY_NAME` - название города по умолчанию
+- `WEATHER_ADMIN_ALERTS` - уведомления администраторов о проблемах с погодой (true/false)
+- `WEATHER_DEBUG` - подробное логирование операций с погодой (true/false)
 
 #### Создание базы данных:
 
@@ -135,12 +157,19 @@ bundle exec ruby app.rb
 
 ## Команды бота
 
-- `/start` - Начало работы с ботом, регистрация пользователя
-- `/menu` - Показать главное меню
+### Основные команды
+- `/start` - Начало работы с ботом, регистрация пользователя и приветственное сообщение
+- `/menu` - Показать главное меню с доступными командами
 - `/help` - Получение справки по использованию бота
 - `/create` - Создание нового мероприятия
 - `/find` - Поиск существующих мероприятий
 - `/my_events` - Управление своими мероприятиями (показывает только предстоящие события)
+
+### Подписка на уведомления
+- `/subscribe` - Подписаться на уведомления о новых событиях (получать сообщения о всех новых мероприятиях напрямую в личные сообщения)
+- `/unsubscribe` - Отписаться от уведомлений о новых событиях
+
+### Административные команды
 - `/announcement` - Публикация анонса мероприятий на сегодня (только для администраторов)
 - `/statistics` - Просмотр статистики за прошлый месяц (только для администраторов)
 - `/scheduler_status` - Проверка статуса планировщика анонсов (только для администраторов)
