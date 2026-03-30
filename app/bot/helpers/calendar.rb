@@ -108,7 +108,10 @@ module Bot
         prev_year = month == 1 ? year - 1 : year
         prev_date = Date.new(prev_year, prev_month, 1)
         
-        if prev_date >= @options[:start_date]
+        current_month_start = Date.new(Date.today.year, Date.today.month, 1)
+        viewing_month_start = Date.new(year, month, 1)
+        
+        if viewing_month_start > current_month_start
           navigation << Telegram::Bot::Types::InlineKeyboardButton.new(
             text: '«',
             callback_data: "calendar_month_#{prev_year}_#{prev_month}"
@@ -155,9 +158,10 @@ module Bot
           date = Date.new(year, month, day)
           date_str = date.strftime('%Y-%m-%d')
           is_locked = @options[:lock_date] && !@lock_date_array.empty? && @lock_date_array.include?(date_str)
+          is_past = date < Date.today
           
-          button_text = day.to_s
-          button_data = is_locked ? 'calendar_ignore' : "calendar_day_#{date_str}"
+          button_text = is_past ? ' ' : day.to_s
+          button_data = (is_locked || is_past) ? 'calendar_ignore' : "calendar_day_#{date_str}"
           
           row << Telegram::Bot::Types::InlineKeyboardButton.new(
             text: button_text,
