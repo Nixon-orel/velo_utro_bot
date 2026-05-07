@@ -86,7 +86,7 @@ STATIC_EVENTS=Встреча,Обсуждение
 
 # Daily Announcement Settings
 DAILY_ANNOUNCEMENT_ENABLED=true
-DAILY_ANNOUNCEMENT_TIME=18:30  # UTC время (21:30 Moscow Time)
+DAILY_ANNOUNCEMENT_TIME=21:30  # Локальное время (указанный в TIMEZONE часовой пояс)
 
 # Monthly Statistics Settings
 MONTHLY_STATS_DAY=1  # день месяца для отправки статистики (1-28), отправка в 09:00 UTC
@@ -115,7 +115,7 @@ WEBHOOK_DOMAIN=https://your-domain.com
 - `ADMIN_IDS` - список Telegram ID администраторов через запятую
 - `STATIC_EVENTS` - типы статических мероприятий (без скорости/расстояния)
 - `DAILY_ANNOUNCEMENT_ENABLED` - включение ежедневных анонсов (true/false)
-- `DAILY_ANNOUNCEMENT_TIME` - время отправки анонсов в UTC (формат HH:MM)
+- `DAILY_ANNOUNCEMENT_TIME` - время отправки анонсов в локальном времени (формат HH:MM, согласно TIMEZONE)
 - `MONTHLY_STATS_DAY` - день месяца для автоматической отправки статистики (1-28)
 - `TIMEZONE` - часовой пояс приложения (по умолчанию Europe/Moscow)
 - `WEATHER_API_KEY` - ключ API для WeatherAPI (получить на https://www.weatherapi.com/)

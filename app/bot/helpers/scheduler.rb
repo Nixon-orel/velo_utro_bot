@@ -24,13 +24,15 @@ module Bot
               hour, minute = time.split(':').map(&:to_i)
               
               puts "[PID #{Process.pid}] Starting daily announcement scheduler"
-              puts "[PID #{Process.pid}] UTC time: #{time}"
+              puts "[PID #{Process.pid}] Local time: #{time}"
               
               cron_expression = "#{minute} #{hour} * * *"
               puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
               
               @@cron_expression = cron_expression
-              @@global_job = @@global_scheduler.cron cron_expression do
+              timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
+              puts "[PID #{Process.pid}] Using timezone: #{timezone}"
+              @@global_job = @@global_scheduler.cron cron_expression, timezone: timezone do
                 send_daily_announcement(bot)
               end
             end
