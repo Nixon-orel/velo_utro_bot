@@ -17,7 +17,13 @@ module Bot
           if acquire_lock
             stop_internal
             
+            if @@global_scheduler && !@@global_scheduler.down?
+              @@global_scheduler.shutdown
+              puts "[PID #{Process.pid}] Previous scheduler shutdown completed"
+            end
+            
             @@global_scheduler = Rufus::Scheduler.new
+            puts "[PID #{Process.pid}] New scheduler instance created"
             
             if CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
               time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
@@ -102,9 +108,13 @@ module Bot
         end
         
         if @@global_scheduler && !@@global_scheduler.down?
+          jobs_count = @@global_scheduler.jobs.count
+          @@global_scheduler.jobs.each(&:unschedule)
+          puts "[PID #{Process.pid}] Unscheduled #{jobs_count} jobs from scheduler"
+          
           @@global_scheduler.shutdown
           @@global_scheduler = nil
-          puts "[PID #{Process.pid}] Scheduler stopped"
+          puts "[PID #{Process.pid}] Scheduler stopped and cleared"
         end
       end
       

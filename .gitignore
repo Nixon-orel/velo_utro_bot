@@ -1,0 +1,41 @@
+# Игнорировать файлы с переменными окружения
+.env
+.env.*
+
+# Игнорировать временные файлы
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Игнорировать логи
+log/*
+*.log
+
+# Игнорировать временные файлы Ruby
+.bundle
+vendor/bundle
+.byebug_history
+
+# Игнорировать файлы базы данных
+*.sqlite3
+*.sqlite3-journal
+
+# Игнорировать файлы, созданные IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Игнорировать файлы, созданные Docker
+.docker-sync/
+
+# Игнорировать файлы конфигурации сервера
+velo-utro-bot.service
+SYSTEMD_SERVICE.md
+TROUBLESHOOTING.md
+deep_scheduler_analysis.sh
+restart_scheduler_with_fix.sh
+
+# Игнорировать файл с описанием проекта для нейросетей
+PROJECT_DESCRIPTION.md
