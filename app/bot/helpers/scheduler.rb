@@ -108,9 +108,13 @@ module Bot
         end
         
         if @@global_scheduler && !@@global_scheduler.down?
-          jobs_count = @@global_scheduler.jobs.count
-          @@global_scheduler.jobs.each(&:unschedule)
-          puts "[PID #{Process.pid}] Unscheduled #{jobs_count} jobs from scheduler"
+          begin
+            jobs_count = @@global_scheduler.jobs.count
+            @@global_scheduler.jobs.each(&:unschedule)
+            puts "[PID #{Process.pid}] Unscheduled #{jobs_count} jobs from scheduler"
+          rescue => e
+            puts "[PID #{Process.pid}] Error unscheduling jobs: #{e.message}"
+          end
           
           @@global_scheduler.shutdown
           @@global_scheduler = nil
