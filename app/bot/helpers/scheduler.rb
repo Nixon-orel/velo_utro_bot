@@ -30,7 +30,7 @@ module Bot
               hour, minute = time.split(':').map(&:to_i)
               
               puts "[PID #{Process.pid}] Starting daily announcement scheduler"
-              puts "[PID #{Process.pid}] Local time: #{time}"
+              puts "[PID #{Process.pid}] UTC time: #{time}"
               
               cron_expression = "#{minute} #{hour} * * *"
               puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
@@ -38,7 +38,8 @@ module Bot
               @@cron_expression = cron_expression
               timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
               puts "[PID #{Process.pid}] Using timezone: #{timezone}"
-              @@global_job = @@global_scheduler.cron cron_expression, timezone: timezone do
+              puts "[PID #{Process.pid}] Creating cron job without timezone parameter (using UTC)"
+              @@global_job = @@global_scheduler.cron cron_expression do
                 send_daily_announcement(bot)
               end
             end
