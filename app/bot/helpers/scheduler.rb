@@ -4,7 +4,8 @@ module Bot
   module Helpers
     class Scheduler
       @@global_scheduler = nil
-      @@global_job = nil
+      @@daily_job = nil
+      @@monthly_job = nil
       @@cron_expression = nil
       @@mutex = Mutex.new
       @@lock_file = nil
@@ -39,7 +40,7 @@ module Bot
               timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
               puts "[PID #{Process.pid}] Using timezone: #{timezone}"
               puts "[PID #{Process.pid}] Creating cron job without timezone parameter (using UTC)"
-              @@global_job = @@global_scheduler.cron cron_expression do
+              @@daily_job = @@global_scheduler.cron cron_expression do
                 send_daily_announcement(bot)
               end
             end
@@ -54,7 +55,7 @@ module Bot
               stats_cron = "0 9 #{stats_day} * *"
               puts "[PID #{Process.pid}] Statistics cron expression: #{stats_cron}"
               
-              @@global_scheduler.cron stats_cron do
+              @@monthly_job = @@global_scheduler.cron stats_cron do
                 send_monthly_statistics(bot)
               end
             end
@@ -73,10 +74,11 @@ module Bot
       
       def self.status
         @@mutex.synchronize do
-          job_active = !@@global_job.nil?
+          daily_job_active = !@@daily_job.nil?
+          monthly_job_active = !@@monthly_job.nil?
           next_run = nil
           
-          if job_active && @@cron_expression
+          if daily_job_active && @@cron_expression
             begin
               next_run = calculate_next_run(@@cron_expression)
             rescue => e
@@ -86,7 +88,8 @@ module Bot
           
           {
             scheduler_running: @@global_scheduler && !@@global_scheduler.down?,
-            job_active: job_active,
+            daily_job_active: daily_job_active,
+            monthly_job_active: monthly_job_active,
             next_run: next_run,
             cron_expression: @@cron_expression,
             jobs_count: @@global_scheduler&.jobs&.count || 0,
@@ -98,14 +101,24 @@ module Bot
       private
       
       def self.stop_internal
-        if @@global_job
-          if @@global_job.respond_to?(:unschedule)
-            @@global_job.unschedule
-            puts "[PID #{Process.pid}] Scheduled job unscheduled"
+        if @@daily_job
+          if @@daily_job.respond_to?(:unschedule)
+            @@daily_job.unschedule
+            puts "[PID #{Process.pid}] Daily job unscheduled"
           else
-            puts "[PID #{Process.pid}] Job object is not valid (#{@@global_job.class}): #{@@global_job}"
+            puts "[PID #{Process.pid}] Daily job object is not valid (#{@@daily_job.class}): #{@@daily_job}"
           end
-          @@global_job = nil
+          @@daily_job = nil
+        end
+        
+        if @@monthly_job
+          if @@monthly_job.respond_to?(:unschedule)
+            @@monthly_job.unschedule
+            puts "[PID #{Process.pid}] Monthly job unscheduled"
+          else
+            puts "[PID #{Process.pid}] Monthly job object is not valid (#{@@monthly_job.class}): #{@@monthly_job}"
+          end
+          @@monthly_job = nil
         end
         
         if @@global_scheduler && !@@global_scheduler.down?
