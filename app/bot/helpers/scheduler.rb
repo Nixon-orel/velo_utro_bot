@@ -259,17 +259,15 @@ module Bot
         minute = parts[0].to_i
         hour = parts[1].to_i
         
-        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
-        tz = ActiveSupport::TimeZone[timezone]
-        now = tz.now
-
-        next_run = tz.local(now.year, now.month, now.day, hour, minute)
+        now = Time.now.utc
+        next_run = Time.utc(now.year, now.month, now.day, hour, minute)
         
         if next_run <= now
           next_run += 1.day
         end
 
-        next_run
+        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
+        next_run.in_time_zone(timezone)
       end
     end
   end
