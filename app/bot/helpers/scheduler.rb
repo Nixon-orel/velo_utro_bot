@@ -23,23 +23,23 @@ module Bot
               puts "[PID #{Process.pid}] Previous scheduler shutdown completed"
             end
             
-            @@global_scheduler = Rufus::Scheduler.new
-            puts "[PID #{Process.pid}] New scheduler instance created"
+            @@global_scheduler = Rufus::Scheduler.new(timezone: 'UTC')
+            puts "[PID #{Process.pid}] New scheduler instance created in UTC"
             
             if CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
               time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
               hour, minute = time.split(':').map(&:to_i)
               
               puts "[PID #{Process.pid}] Starting daily announcement scheduler"
-              puts "[PID #{Process.pid}] UTC time: #{time}"
+              puts "[PID #{Process.pid}] Configured UTC time: #{time}"
+              puts "[PID #{Process.pid}] Parsed hour: #{hour}, minute: #{minute}"
+              puts "[PID #{Process.pid}] Current UTC time: #{Time.now.utc}"
               
               cron_expression = "#{minute} #{hour} * * *"
               puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
               
               @@cron_expression = cron_expression
-              timezone = CONFIG['TIMEZONE'] || 'Europe/Moscow'
-              puts "[PID #{Process.pid}] Using timezone: #{timezone}"
-              puts "[PID #{Process.pid}] Creating cron job without timezone parameter (using UTC)"
+              puts "[PID #{Process.pid}] Creating cron job in UTC"
               @@daily_job = @@global_scheduler.cron cron_expression do
                 send_daily_announcement(bot)
               end
@@ -226,7 +226,7 @@ module Bot
           
           puts "[#{current_time}] [PID #{Process.pid}] Daily announcement sent successfully"
         rescue => e
-          current_time = Time.now.in_time_zone(CONFIG['TIMEZONE'] || 'Europe/Moscow')
+          current_time = Time.now.utc
           puts "[#{current_time}] [PID #{Process.pid}] Error sending daily announcement: #{e.message}"
           puts e.backtrace.join("\n")
         end
@@ -279,8 +279,7 @@ module Bot
           next_run += 1.day
         end
 
-        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
-        next_run.in_time_zone(timezone)
+        next_run
       end
     end
   end
