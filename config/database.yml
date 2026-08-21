@@ -6,7 +6,7 @@ default: &default
 
 development:
   <<: *default
-  database: velo_utro_bot_development
+  database: <%= ENV['DB_NAME'] || 'velo_utro_bot_development' %>
   username: <%= ENV['DB_USER'] || 'postgres' %>
   password: <%= ENV['DB_PASSWORD'] || 'postgres' %>
   host: <%= ENV['DB_HOST'] || 'localhost' %>

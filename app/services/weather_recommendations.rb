@@ -1,45 +1,49 @@
+require 'time'
+require_relative 'weather/forecast'
+
 class WeatherRecommendations
-  def self.generate(weather_data, event_time)
+  def self.generate(weather_data, event_time = nil)
     return [] if weather_data.nil? || weather_data.empty?
+
+    weather_data = Weather::Forecast.normalize(weather_data)
     
     recommendations = []
-    temp = (weather_data[:temp_c] || weather_data['temp_c']).to_f
-    feels_like = (weather_data[:feelslike_c] || weather_data['feelslike_c']).to_f
-    wind_speed = (weather_data[:wind_kph] || weather_data['wind_kph']).to_f
-    precip_prob = (weather_data[:precip_prob] || weather_data['precip_prob']).to_i
-    precip_mm = (weather_data[:precip_mm] || weather_data['precip_mm']).to_f
-    condition = (weather_data[:condition] || weather_data['condition']).to_s.downcase
+    feels_like = weather_data['feelslike_c'].to_f
+    wind_speed = weather_data['wind_kph'].to_f
+    precip_prob = weather_data['precip_prob'].to_i
+    precip_mm = weather_data['precip_mm'].to_f
+    condition = weather_data['condition'].to_s.downcase
     
-    recommendations.concat(temperature_recommendations(temp, feels_like))
+    recommendations.concat(temperature_recommendations(feels_like))
     recommendations.concat(precipitation_recommendations(precip_prob, precip_mm, condition))
     recommendations.concat(wind_recommendations(wind_speed))
     recommendations.concat(time_recommendations(weather_data, event_time))
-    recommendations.concat(alert_recommendations(weather_data[:alerts] || weather_data['alerts']))
+    recommendations.concat(alert_recommendations(weather_data['alerts']))
     
     recommendations.uniq.compact
   end
   
   private
   
-  def self.temperature_recommendations(temp, feels_like)
+  def self.temperature_recommendations(feels_like)
     recommendations = []
     effective_temp = feels_like
     
     case effective_temp
-    when Float::INFINITY..-1
+    when ...0
       recommendations << "🥶 Мороз! Полная зимняя экипировка"
       recommendations << "⚠️ Осторожно - возможен гололед!"
-    when -1..5
+    when 0...5
       recommendations << "🧥 Термобелье и непродуваемая куртка"
       recommendations << "🧤 Зимние перчатки обязательны"
       recommendations << "👂 Защита для ушей"
-    when 5..15
+    when 5...15
       recommendations << "🧥 Ветровка или жилет"
       recommendations << "🧤 Легкие перчатки"
       recommendations << "🧣 Бафф на шею"
-    when 15..25
+    when 15...25
       recommendations << "👕 Идеальная погода! Легкая одежда"
-    when 25..Float::INFINITY
+    when 25..
       recommendations << "💧 Возьмите больше воды"
       recommendations << "☀️ Солнцезащитный крем"
     end
@@ -84,21 +88,23 @@ class WeatherRecommendations
   
   def self.time_recommendations(weather_data, event_time)
     recommendations = []
-    sunset = weather_data[:sunset] || weather_data['sunset']
+    sunset = weather_data['sunset']
     return recommendations unless event_time && sunset
     
     begin
-      event_hour = event_time.split(':')[0].to_i
-      sunset_hour = sunset.split(':')[0].to_i
+      event_hour, event_minute = event_time.to_s.split(':').first(2).map(&:to_i)
+      sunset_time = Time.strptime(sunset, '%I:%M %p')
+      event_minutes = event_hour * 60 + event_minute
+      sunset_minutes = sunset_time.hour * 60 + sunset_time.min
       
-      if event_hour >= sunset_hour - 2
+      if event_minutes >= sunset_minutes - 120
         recommendations << "🔦 Фонари обязательны (скоро темно)"
         recommendations << "🔆 Светоотражающие элементы"
       elsif event_hour <= 6
         recommendations << "🔦 Фонари для утренней поездки"
         recommendations << "🔆 Светоотражающие элементы"
       end
-    rescue
+    rescue ArgumentError
       # Игнорируем ошибки парсинга времени
     end
     

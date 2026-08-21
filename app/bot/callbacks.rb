@@ -3,7 +3,7 @@ require_relative 'callback_handler'
 
 module Bot
   module Callbacks
-    Dir[File.join(File.dirname(__FILE__), 'callbacks', '*.rb')].each do |file|
+    Dir[File.join(File.dirname(__FILE__), 'callbacks', '*.rb')].sort.each do |file|
       require file
     end
     

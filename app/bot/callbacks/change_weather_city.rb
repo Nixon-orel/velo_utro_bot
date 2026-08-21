@@ -2,14 +2,14 @@ module Bot
   module Callbacks
     class ChangeWeatherCity < Bot::CallbackHandler
       def process
-        event_id = get_event_id
-        event = get_event
+        event = get_authorized_event
         return unless event
 
-        @session.edit_event_id = event_id
-        transition_to_state('choose_weather_city')
+        event_id = event.id.to_s
+
+        prepare_event_edit(event, 'choose_weather_city')
         
-        default_city = ENV['DEFAULT_WEATHER_CITY_NAME'] || 'Орёл'
+        default_city = APP_CONFIG.default_weather_city
         
         buttons = [
           [
@@ -31,12 +31,6 @@ module Bot
         answer_callback_query("Выберите источник погодных данных")
       end
       
-      private
-      
-      def transition_to_state(state)
-        @session.state = state
-        @session.save_session
-      end
     end
   end
 end

@@ -3,7 +3,7 @@ require 'yaml'
 require 'erb'
 require 'dotenv/load'
 
-env = ENV['RACK_ENV'] || 'development'
+env = APP_CONFIG.environment
 
 database_yml_path = File.join(File.dirname(__FILE__), 'database.yml')
 database_yml_content = File.read(database_yml_path)
@@ -13,5 +13,5 @@ db_config = YAML.load(erb_processed, aliases: true)[env]
 ActiveRecord::Base.establish_connection(db_config)
 
 if env == 'development'
-  ActiveRecord::Base.logger = Logger.new(STDOUT)
+  ActiveRecord::Base.logger = APP_LOGGER
 end

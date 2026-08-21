@@ -1,37 +1,49 @@
 module Bot
   module Helpers
     class WeatherNotifier
-      def self.handle_3d_weather_update(event, old_weather, new_weather)
+      def initialize(bot)
+        @gateway = Notifications::TelegramGateway.new(bot)
+      end
+
+      def handle_3d_weather_update(event, old_weather, new_weather)
         return unless event && new_weather
+
+        old_weather = Weather::Forecast.normalize(old_weather)
+        new_weather = Weather::Forecast.normalize(new_weather)
         
         if old_weather && old_weather['is_fallback']
           send_accurate_weather_update(event, old_weather, new_weather)
         elsif weather_changed_critically?(old_weather, new_weather)
           send_critical_weather_alerts(event, old_weather, new_weather)
         else
-          update_event_message_silently(event, new_weather)
+          update_event_message_silently(event)
         end
       end
       
-      def self.handle_24h_weather_update(event, old_weather, new_weather)
+      def handle_24h_weather_update(event, old_weather, new_weather)
         return unless event && new_weather
+
+        old_weather = Weather::Forecast.normalize(old_weather)
+        new_weather = Weather::Forecast.normalize(new_weather)
         
         if weather_changed_critically?(old_weather, new_weather)
           send_critical_weather_alerts(event, old_weather, new_weather)
         else
-          update_event_message_silently(event, new_weather)
+          update_event_message_silently(event)
         end
       end
       
-      def self.handle_2h_weather_update(event, weather_data)
+      def handle_2h_weather_update(event, weather_data)
         return unless event && weather_data
+
+        weather_data = Weather::Forecast.normalize(weather_data)
         
         send_channel_weather_forecast(event, weather_data)
       end
       
       private
       
-      def self.weather_changed_critically?(old_weather, new_weather)
+      def weather_changed_critically?(old_weather, new_weather)
         return false if old_weather.empty?
         
         temp_change = (new_weather['temp_c'].to_f - old_weather['temp_c'].to_f).abs
@@ -47,7 +59,7 @@ module Bot
         temp_change > 5 || precip_change || wind_change || alerts_appeared
       end
       
-      def self.send_critical_weather_alerts(event, old_weather, new_weather)
+      def send_critical_weather_alerts(event, old_weather, new_weather)
         require_relative '../../services/weather_recommendations'
         
         message = format_critical_change_message(event, old_weather, new_weather)
@@ -58,13 +70,13 @@ module Bot
         end
         
         event.weather_alerts_sent ||= {}
-        event.weather_alerts_sent['24h_critical'] = Time.current.to_s
+        event.weather_alerts_sent['24h_critical'] = AppClock.now.to_s
         event.save
         
-        puts "[WeatherNotifier] Critical weather alerts sent for event #{event.id}"
+        AppLogger.info('Bot::Helpers::WeatherNotifier', 'Critical weather alerts sent', event_id: event.id)
       end
       
-      def self.send_accurate_weather_update(event, old_weather, new_weather)
+      def send_accurate_weather_update(event, old_weather, new_weather)
         require_relative '../../services/weather_recommendations'
         
         message = format_accurate_weather_message(event, old_weather, new_weather)
@@ -75,41 +87,44 @@ module Bot
         end
         
         # Обновляем сообщение в канале с точными данными
-        update_event_message_silently(event, new_weather)
+        update_event_message_silently(event)
         
         event.weather_alerts_sent ||= {}
-        event.weather_alerts_sent['3d_accurate'] = Time.current.to_s
+        event.weather_alerts_sent['3d_accurate'] = AppClock.now.to_s
         event.save
         
-        puts "[WeatherNotifier] Accurate weather update sent for event #{event.id}"
+        AppLogger.info('Bot::Helpers::WeatherNotifier', 'Accurate weather update sent', event_id: event.id)
       end
       
-      def self.update_event_message_silently(event, new_weather)
-        return unless event.channel_message_id && ENV['PUBLIC_CHANNEL_ID']
+      def update_event_message_silently(event)
+        return unless event.channel_message_id && APP_CONFIG.public_channel_id
         
         begin
-          bot = get_bot_instance
-          return unless bot
-          
           updated_message = Bot::Helpers::Formatter.event_info(event)
           
-          bot.api.edit_message_text(
-            chat_id: ENV['PUBLIC_CHANNEL_ID'],
+          @gateway.edit_message_text(
+            chat_id: APP_CONFIG.public_channel_id,
             message_id: event.channel_message_id,
             text: updated_message,
             parse_mode: 'HTML'
           )
           
-          puts "[WeatherNotifier] Event message silently updated for event #{event.id}"
+          AppLogger.info('Bot::Helpers::WeatherNotifier', 'Event message updated', event_id: event.id)
         rescue => e
-          puts "[WeatherNotifier] Failed to update event message: #{e.message}"
+          AppLogger.error(
+            'Bot::Helpers::WeatherNotifier',
+            'Failed to update event message',
+            event_id: event.id,
+            exception: e
+          )
         end
       end
       
-      def self.send_channel_weather_forecast(event, weather_data)
+      def send_channel_weather_forecast(event, weather_data)
         require_relative '../../services/weather_recommendations'
+        return unless event.published?
         
-        channel_id = ENV['PUBLIC_CHANNEL_ID']
+        channel_id = APP_CONFIG.public_channel_id
         return unless channel_id
         
         recommendations = WeatherRecommendations.generate(weather_data, event.time)
@@ -124,26 +139,28 @@ module Bot
         )
         
         begin
-          bot = get_bot_instance
-          return unless bot
-          
-          bot.api.send_message(
+          @gateway.send_message(
             chat_id: channel_id,
             text: message,
             parse_mode: 'HTML'
           )
           
           event.weather_alerts_sent ||= {}
-          event.weather_alerts_sent['2h_channel'] = Time.current.to_s
+          event.weather_alerts_sent['2h_channel'] = AppClock.now.to_s
           event.save
           
-          puts "[WeatherNotifier] Channel forecast sent for event #{event.id}"
+          AppLogger.info('Bot::Helpers::WeatherNotifier', 'Channel forecast sent', event_id: event.id)
         rescue => e
-          puts "[WeatherNotifier] Failed to send channel forecast: #{e.message}"
+          AppLogger.error(
+            'Bot::Helpers::WeatherNotifier',
+            'Failed to send channel forecast',
+            event_id: event.id,
+            exception: e
+          )
         end
       end
       
-      def self.format_critical_change_message(event, old_weather, new_weather)
+      def format_critical_change_message(event, old_weather, new_weather)
         require_relative '../../services/weather_recommendations'
         
         old_condition = old_weather['condition'] || 'Неизвестно'
@@ -181,7 +198,7 @@ module Bot
         message
       end
       
-      def self.format_accurate_weather_message(event, old_weather, new_weather)
+      def format_accurate_weather_message(event, old_weather, new_weather)
         require_relative '../../services/weather_recommendations'
         
         recommendations = WeatherRecommendations.generate(new_weather, event.time)
@@ -218,7 +235,7 @@ module Bot
         message
       end
       
-      def self.format_weather_info(weather_data, recommendations)
+      def format_weather_info(weather_data, recommendations)
         temp = weather_data['temp_c']
         feels_like = weather_data['feelslike_c']
         condition = weather_data['condition']
@@ -238,25 +255,24 @@ module Bot
         weather_text
       end
       
-      def self.send_message_to_user(user, message)
+      def send_message_to_user(user, message)
         begin
-          bot = get_bot_instance
-          return unless bot
-          
-          bot.api.send_message(
+          @gateway.send_message(
             chat_id: user.telegram_id,
             text: message,
             parse_mode: 'HTML'
           )
-          puts "[WeatherNotifier] Message sent to user #{user.id}"
+          AppLogger.debug('Bot::Helpers::WeatherNotifier', 'Weather message sent', user_id: user.id)
         rescue => e
-          puts "[WeatherNotifier] Failed to notify user #{user.id}: #{e.message}"
+          AppLogger.error(
+            'Bot::Helpers::WeatherNotifier',
+            'Failed to notify user',
+            user_id: user.id,
+            exception: e
+          )
         end
       end
       
-      def self.get_bot_instance
-        $global_bot
-      end
     end
   end
 end

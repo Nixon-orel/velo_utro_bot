@@ -5,22 +5,31 @@ module Bot
         event = get_event
         return unless event
         
-        unless event.author_id == @user.id
+        result = Events::DeleteEvent.call(event: event, actor: @user)
+
+        if result.error_code == :forbidden
           answer_callback_query(I18n.t('not_author'), show_alert: true)
           return
         end
-        
-        participants = event.participants.to_a
-        
-        notify_channel_about_deletion(event)
-        
-        if participants.any?
-          participants.each do |participant|
-            send_deletion_notification(participant, event)
-          end
+
+        if result.failure?
+          AppLogger.error(
+            'Bot::Callbacks::Delete',
+            'Failed to delete event',
+            event_id: event.id,
+            error_code: result.error_code,
+            exception: result.error
+          )
+          answer_callback_query(I18n.t('invalid_input'), show_alert: true)
+          return
         end
-        
-        event.destroy
+
+        Bot::Helpers::WeatherScheduler.cancel_for(event.id)
+        notify_channel_about_deletion(event)
+        result.metadata[:participants].each do |participant|
+          send_deletion_notification(participant, event)
+        end
+
         delete_message
         answer_callback_query(I18n.t('event_deleted'))
       end
@@ -46,25 +55,35 @@ module Bot
             parse_mode: 'HTML'
           )
         rescue => e
-          puts "Failed to notify participant #{participant.telegram_id}: #{e.message}"
+          AppLogger.error(
+            'Bot::Callbacks::Delete',
+            'Failed to notify participant',
+            participant_id: participant.id,
+            event_id: event.id,
+            exception: e
+          )
         end
       end
       
       def notify_channel_about_deletion(event)
-        channel_id = CONFIG['PUBLIC_CHANNEL_ID']
+        channel_id = APP_CONFIG.public_channel_id
         return unless channel_id
         return unless event.published
         
-        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
-        tz = ActiveSupport::TimeZone[timezone]
-        event_datetime = tz.parse("#{event.date} #{event.time}")
-        return if event_datetime.utc < Time.now.utc
+        event_datetime = event.starts_at
+        return unless event_datetime
+        return if event_datetime < AppClock.now
         
         notifier = Bot::Helpers::Notifier.new(@bot)
         notifier.notify_channel_about_change(event, 'event_deleted_channel_notification')
         
       rescue => e
-        puts "Error notifying channel about event deletion: #{e.message}"
+        AppLogger.error(
+          'Bot::Callbacks::Delete',
+          'Failed to notify channel about event deletion',
+          event_id: event.id,
+          exception: e
+        )
       end
     end
   end

@@ -9,8 +9,8 @@ module Bot
           date_format: 'YYYY-MM-DD',
           language: 'ru',
           start_week_day: 1,
-          start_date: Date.today,
-          stop_date: (Date.today + 6.months),
+          start_date: AppClock.today,
+          stop_date: (AppClock.today + 6.months),
           lock_date: false
         }.merge(options)
         
@@ -40,6 +40,9 @@ module Bot
         action = parts[1]
         
         case action
+        when 'ignore'
+          bot.api.answer_callback_query(callback_query_id: callback.id)
+          return nil
         when 'day'
           date_str = parts[2]
           date = Date.parse(date_str)
@@ -108,7 +111,7 @@ module Bot
         prev_year = month == 1 ? year - 1 : year
         prev_date = Date.new(prev_year, prev_month, 1)
         
-        current_month_start = Date.new(Date.today.year, Date.today.month, 1)
+        current_month_start = AppClock.today.beginning_of_month
         viewing_month_start = Date.new(year, month, 1)
         
         if viewing_month_start > current_month_start
@@ -158,7 +161,7 @@ module Bot
           date = Date.new(year, month, day)
           date_str = date.strftime('%Y-%m-%d')
           is_locked = @options[:lock_date] && !@lock_date_array.empty? && @lock_date_array.include?(date_str)
-          is_past = date < Date.today
+          is_past = date < AppClock.today
           
           button_text = is_past ? ' ' : day.to_s
           button_data = (is_locked || is_past) ? 'calendar_ignore' : "calendar_day_#{date_str}"

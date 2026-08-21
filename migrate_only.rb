@@ -1,7 +1,5 @@
-require 'dotenv/load'
-require 'sinatra/activerecord'
+require_relative 'config/environment'
 
-require_relative 'config/database'
-
-ActiveRecord::MigrationContext.new('db/migrations/').migrate
-puts "Migrations completed successfully!"
+migrations_path = File.join(VELO_UTRO_ROOT, 'db', 'migrations')
+ActiveRecord::MigrationContext.new(migrations_path).migrate
+AppLogger.info('Migration', 'Migrations completed')

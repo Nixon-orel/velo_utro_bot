@@ -1,67 +1,29 @@
 module Bot
   module Callbacks
-    class Imauthor
-      def initialize(bot, callback, session)
-        @bot = bot
-        @callback = callback
-        @session = session
-        @chat_id = callback.message.chat.id
-        @message_id = callback.message.message_id
-      end
-      
+    class Imauthor < Bot::CallbackHandler
       def process
-        return unless @callback.message.chat.type == 'private'
-        user = User.find_or_create_from_telegram(@callback.from)
-        
-        timezone = ENV['TIMEZONE'] || 'Europe/Moscow'
-        today = Time.now.in_time_zone(timezone).to_date
-        events = user.authored_events
-                     .where('date >= ?', today)
-                     .order(date: :asc, time: :asc)
-        
-        @bot.api.delete_message(
-          chat_id: @chat_id,
-          message_id: @message_id
-        )
-        
-        if events.empty?
-          @bot.api.send_message(
-            chat_id: @chat_id,
-            text: I18n.t('no_events')
-          )
-        else
-          events.each do |event|
-            message = Bot::Helpers::Formatter.event_info(event)
-            
-            buttons = [
-              [
-                Telegram::Bot::Types::InlineKeyboardButton.new(
-                  text: I18n.t('buttons.edit'),
-                  callback_data: "edit-#{event.id}"
-                )
-              ],
-              [
-                Telegram::Bot::Types::InlineKeyboardButton.new(
-                  text: I18n.t('buttons.delete'),
-                  callback_data: "delete-#{event.id}"
-                )
-              ],
-              [
-                Telegram::Bot::Types::InlineKeyboardButton.new(
-                  text: I18n.t('buttons.publish'),
-                  callback_data: "publish-#{event.id}"
-                )
-              ]
-            ]
-            
-            markup = Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: buttons)
-            @bot.api.send_message(
-              chat_id: @chat_id,
-              text: message,
-              parse_mode: 'HTML',
-              reply_markup: markup
-            )
+        return unless ensure_private_chat
+
+        events = @user.authored_events
+                      .where('date >= ?', AppClock.today)
+                      .order(date: :asc, time: :asc)
+
+        delete_message
+        return send_message(I18n.t('no_events')) if events.empty?
+
+        events.each do |event|
+          buttons = [
+            [create_button(I18n.t('buttons.edit'), "edit-#{event.id}")],
+            [create_button(I18n.t('buttons.delete'), "delete-#{event.id}")]
+          ]
+          unless event.published?
+            buttons << [create_button(I18n.t('buttons.publish'), "publish-#{event.id}")]
           end
+
+          send_html_message(
+            Bot::Helpers::Formatter.event_info(event),
+            reply_markup: create_keyboard(buttons)
+          )
         end
       end
     end

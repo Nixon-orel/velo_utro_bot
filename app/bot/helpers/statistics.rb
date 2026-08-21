@@ -6,14 +6,16 @@ module Bot
       end
       
       def monthly_report(month = nil, year = nil)
-        month ||= (Date.today - 1.month).month
-        year ||= (Date.today - 1.month).year
+        previous_month = AppClock.today - 1.month
+        month ||= previous_month.month
+        year ||= previous_month.year
         
         start_date = Date.new(year, month, 1)
         end_date = start_date.end_of_month
         
         events = Event.includes(:author, :participants)
                      .where(date: start_date..end_date)
+                     .to_a
         
         {
           period: "#{I18n.t('date.month_names')[month]} #{year}",
@@ -44,12 +46,12 @@ module Bot
         
         if data[:top_organizer]
           report << "\n🎉 Главный массовик-затейник месяца:"
-          report << "  @#{data[:top_organizer][:nickname]} (создано #{data[:top_organizer][:count]} #{pluralize_events(data[:top_organizer][:count])})"
+          report << "  #{data[:top_organizer][:display_name]} (создано #{data[:top_organizer][:count]} #{pluralize_events(data[:top_organizer][:count])})"
         end
         
         if data[:most_active_participant]
           report << "\n💫 Душа компании месяца:"
-          report << "  @#{data[:most_active_participant][:nickname]} (участвовал(а) в #{data[:most_active_participant][:count]} #{pluralize_events(data[:most_active_participant][:count])})"
+          report << "  #{data[:most_active_participant][:display_name]} (участвовал(а) в #{data[:most_active_participant][:count]} #{pluralize_events(data[:most_active_participant][:count])})"
         end
         
         report << "\n\n💪 Присоединяйтесь к нашему дружному сообществу пользователей бота!"
@@ -60,31 +62,37 @@ module Bot
       
       def send_monthly_report
         unless @bot
-          puts "[Statistics] Bot instance is nil, cannot send report"
-          return
+          AppLogger.warn('Bot::Helpers::Statistics', 'Bot instance is missing')
+          return false
         end
         
-        unless ENV['PUBLIC_CHANNEL_ID']
-          puts "[Statistics] PUBLIC_CHANNEL_ID is not set, cannot send report"
-          return
+        unless APP_CONFIG.public_channel_id
+          AppLogger.warn('Bot::Helpers::Statistics', 'Public channel is not configured')
+          return false
         end
         
-        puts "[Statistics] Generating monthly report..."
+        AppLogger.info('Bot::Helpers::Statistics', 'Generating monthly report')
         data = monthly_report
         
-        puts "[Statistics] Report data: bike_events=#{data[:bike_events]}, total_events=#{data[:total_events]}, period=#{data[:period]}"
+        AppLogger.debug(
+          'Bot::Helpers::Statistics',
+          'Monthly report generated',
+          bike_events: data[:bike_events],
+          total_events: data[:total_events],
+          period: data[:period]
+        )
         message = format_monthly_report(data)
         
-        puts "[Statistics] Sending report to channel #{ENV['PUBLIC_CHANNEL_ID']}"
         @bot.api.send_message(
-          chat_id: ENV['PUBLIC_CHANNEL_ID'],
+          chat_id: APP_CONFIG.public_channel_id,
           text: message,
           parse_mode: 'HTML'
         )
-        puts "[Statistics] Monthly report sent successfully"
+        AppLogger.info('Bot::Helpers::Statistics', 'Monthly report sent')
+        true
       rescue => e
-        puts "[Statistics] Error sending monthly statistics: #{e.message}"
-        puts e.backtrace.join("\n")
+        AppLogger.error('Bot::Helpers::Statistics', 'Failed to send monthly report', exception: e)
+        false
       end
       
       private
@@ -94,7 +102,7 @@ module Bot
       end
       
       def count_bike_events(events)
-        events.select { |e| e.event_type&.include?('Велосипед') }.count
+        events.count { |event| event.event_type&.include?('Велосипед') }
       end
       
       def count_other_events_by_type(events)
@@ -111,16 +119,9 @@ module Bot
         events.each do |event|
           next unless event.distance
           
-          distance_str = event.distance.to_s.strip
-          
-          match = distance_str.match(/(\d+)\s*(км|km|Км|КМ)/i)
-          if match
-            total += match[1].to_i
-          elsif distance_str.match(/^\d+$/)
-            total += distance_str.to_i
-          elsif distance_str.match(/^(\d+)/)
-            total += $1.to_i
-          end
+          distance = event.distance.to_s.strip
+          match = distance.match(/([0-9]+)\s*(?:км|km)/i) || distance.match(/\A([0-9]+)/)
+          total += match[1].to_i if match
         end
         
         total
@@ -129,43 +130,28 @@ module Bot
       def find_top_organizer(events)
         return nil if events.empty?
         
-        author_counts = events.group_by(&:author_id)
-                              .transform_values(&:count)
-                              .sort_by { |_, count| -count }
-                              .first
-        
-        return nil unless author_counts
-        
-        author = User.find_by(id: author_counts[0])
+        author, authored_events = events.group_by(&:author).max_by { |_, values| values.count }
         return nil unless author
         
         {
-          nickname: author.nickname || author.username || "Пользователь",
-          count: author_counts[1]
+          display_name: author.display_name,
+          count: authored_events.count
         }
       end
       
       def find_most_active_participant(events)
         return nil if events.empty?
         
-        participant_counts = {}
-        
-        events.each do |event|
-          event.participants.each do |participant|
-            participant_counts[participant.id] ||= 0
-            participant_counts[participant.id] += 1
-          end
-        end
+        participants = events.flat_map { |event| event.participants.to_a }
+        participant_counts = participants.tally
         
         return nil if participant_counts.empty?
         
-        top_participant = participant_counts.sort_by { |_, count| -count }.first
-        user = User.find_by(id: top_participant[0])
-        return nil unless user
+        user, count = participant_counts.max_by { |_, value| value }
         
         {
-          nickname: user.nickname || user.username || "Пользователь",
-          count: top_participant[1]
+          display_name: user.display_name,
+          count: count
         }
       end
       

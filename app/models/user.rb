@@ -33,8 +33,7 @@ class User < ActiveRecord::Base
   end
   
   def admin?
-    admin_ids = ENV['ADMIN_IDS'].to_s.split(',').map(&:strip)
-    admin_ids.include?(telegram_id)
+    APP_CONFIG.admin_ids.include?(telegram_id)
   end
   
   def display_name

@@ -13,9 +13,12 @@ module Bot
         return unless event
         
         processed_value = process_value(value)
-        old_value = event.send(field)
-        
-        event.update(field => processed_value)
+        result = Events::EditEvent.call(event: event, actor: @user, changes: { field => processed_value })
+        if result.failure?
+          handle_edit_failure(result, event)
+          return
+        end
+        old_value = result.metadata[:previous_values][field]
         
         if should_notify?(processed_value, old_value)
           notify_about_change(event, notification_key, processed_value)
@@ -40,16 +43,31 @@ module Bot
       def should_reschedule_weather?(field, event)
         (field == :time || field == :date) &&
         event.weather_data.present? &&
-        ENV['WEATHER_ENABLED'] == 'true'
+        APP_CONFIG.weather_enabled?
       end
       
       def reschedule_weather_updates(event)
         require_relative '../helpers/weather_scheduler'
         Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
-        puts "[EditHandler] Rescheduled weather updates for event #{event.id}"
+        AppLogger.info('Bot::States::EditHandler', 'Rescheduled weather updates', event_id: event.id)
       end
       
       private
+
+      def handle_edit_failure(result, event)
+        if result.error_code == :forbidden
+          send_message(I18n.t('not_author'))
+        else
+          AppLogger.error(
+            'Bot::States::EditHandler',
+            'Failed to edit event',
+            event_id: event.id,
+            error_code: result.error_code,
+            exception: result.error
+          )
+          send_message(I18n.t('invalid_input'))
+        end
+      end
       
       def get_edit_event
         event_id = @session.edit_event_id

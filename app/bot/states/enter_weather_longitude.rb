@@ -6,7 +6,11 @@ module Bot
         
         if valid_longitude?(longitude)
           if @session.edit_event_id
-            event = Event.find(@session.edit_event_id)
+            event = Event.find_by(id: @session.edit_event_id)
+            unless event
+              send_message(I18n.t('invalid_input'))
+              return
+            end
             latitude = @session.new_event ? @session.new_event['latitude'] : event.latitude
             update_existing_event_weather(event, latitude, longitude.to_f)
           else
@@ -34,21 +38,33 @@ module Bot
         require_relative '../../services/event_weather_service'
         
         result = EventWeatherService.create_event_with_weather(@session, coordinates, city_name)
+        unless result.success?
+          AppLogger.error(
+            'Bot::States::EnterWeatherLongitude',
+            'Failed to create event',
+            error_code: result.error_code,
+            exception: result.error
+          )
+          send_message(I18n.t('invalid_input'))
+          return
+        end
+
+        event = result.value
         transition_to_state(nil)
         
         buttons = [
           [
             create_button(
               I18n.t('buttons.publish'),
-              "publish-#{result[:event].id}"
+              "publish-#{event.id}"
             )
           ]
         ]
         
         markup = create_keyboard(buttons)
         
-        if result[:success]
-          message = I18n.t('event_created_with_weather', weather_info: result[:weather_info])
+        if result.metadata[:weather_available]
+          message = I18n.t('event_created_with_weather', weather_info: result.metadata[:weather_info])
           send_message(message, { reply_markup: markup })
         else
           send_message(I18n.t('event_created_weather_failed'), { reply_markup: markup })
@@ -63,13 +79,29 @@ module Bot
         
         weather_data = WeatherService.fetch_weather_for_event(coordinates, event.date, event.time)
         
-        event.update(
-          weather_city: city_name,
-          latitude: latitude,
-          longitude: longitude,
-          weather_data: weather_data || {},
-          weather_updated_at: Time.current
+        result = Events::EditEvent.call(
+          event: event,
+          actor: @user,
+          changes: {
+            weather_city: city_name,
+            latitude: latitude,
+            longitude: longitude,
+            weather_data: weather_data || {},
+            weather_updated_at: weather_data ? AppClock.now : nil
+          }
         )
+
+        unless result.success?
+          message_key = result.error_code == :forbidden ? 'not_author' : 'invalid_input'
+          send_message(I18n.t(message_key))
+          return
+        end
+
+        if event.weather_data.present?
+          Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
+        else
+          Bot::Helpers::WeatherScheduler.cancel_for(event.id)
+        end
         
         transition_to_state(nil)
         

@@ -6,8 +6,8 @@ module Bot
         
         case choice
         when '1'
-          coordinates = ENV['DEFAULT_WEATHER_COORDINATES'] || '52.9651,36.0785'
-          city_name = ENV['DEFAULT_WEATHER_CITY_NAME'] || 'Орёл'
+          coordinates = APP_CONFIG.default_weather_coordinates
+          city_name = APP_CONFIG.default_weather_city
           fetch_weather_and_save(coordinates, city_name)
         when '2'
           transition_to_state('enter_weather_latitude')
@@ -23,13 +23,25 @@ module Bot
         require_relative '../../services/event_weather_service'
         
         result = EventWeatherService.create_event_with_weather(@session, coordinates, city_name)
+        unless result.success?
+          AppLogger.error(
+            'Bot::States::ChooseWeatherCity',
+            'Failed to create event',
+            error_code: result.error_code,
+            exception: result.error
+          )
+          send_message(I18n.t('invalid_input'))
+          return
+        end
+
+        event = result.value
         transition_to_state(nil)
         
         buttons = [
           [
             create_button(
               I18n.t('buttons.publish'),
-              "publish-#{result[:event].id}"
+              "publish-#{event.id}"
             )
           ]
         ]
@@ -37,8 +49,8 @@ module Bot
         markup = create_keyboard(buttons)
         remove_keyboard = remove_reply_keyboard
         
-        if result[:success]
-          message = I18n.t('event_created_with_weather', weather_info: result[:weather_info])
+        if result.metadata[:weather_available]
+          message = I18n.t('event_created_with_weather', weather_info: result.metadata[:weather_info])
           send_message(message, { reply_markup: remove_keyboard })
           send_message("🎉", { reply_markup: markup })
         else

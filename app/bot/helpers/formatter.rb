@@ -33,7 +33,7 @@ module Bot
           }
         }
         
-        if event.weather_data.present? && ENV['WEATHER_ENABLED'] == 'true'
+        if event.weather_data.present? && APP_CONFIG.weather_enabled?
           weather_info = format_weather_detailed(event.weather_data, event.weather_city)
           event_data[:weather] = weather_info
         end
@@ -117,14 +117,15 @@ module Bot
       end
       
       def self.extract_weather_data(weather_data)
+        weather_data = Weather::Forecast.normalize(weather_data)
         {
-          temp: weather_data['temp_c'] || weather_data[:temp_c],
-          feels_like: weather_data['feelslike_c'] || weather_data[:feelslike_c],
-          condition: weather_data['condition'] || weather_data[:condition],
-          wind_speed: weather_data['wind_kph'] || weather_data[:wind_kph],
-          precip_prob: weather_data['precip_prob'] || weather_data[:precip_prob],
-          humidity: weather_data['humidity'] || weather_data[:humidity],
-          uv_index: weather_data['uv'] || weather_data[:uv]
+          temp: weather_data['temp_c'],
+          feels_like: weather_data['feelslike_c'],
+          condition: weather_data['condition'],
+          wind_speed: weather_data['wind_kph'],
+          precip_prob: weather_data['precip_prob'],
+          humidity: weather_data['humidity'],
+          uv_index: weather_data['uv']
         }
       end
       

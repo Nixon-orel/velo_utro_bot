@@ -22,8 +22,7 @@ module Bot
       end
       
       def admin_user?
-        admin_ids = ENV['ADMIN_IDS'].to_s.split(',').map(&:to_i)
-        admin_ids.include?(@message.from.id)
+        APP_CONFIG.admin_ids.include?(@message.from.id.to_s)
       end
     end
   end

@@ -1,20 +1,9 @@
 module Bot
   module Callbacks
-    class FindAll
-      def initialize(bot, callback, session)
-        @bot = bot
-        @callback = callback
-        @session = session
-        @chat_id = callback.message.chat.id
-        @message_id = callback.message.message_id
-      end
-      
+    class FindAll < Bot::CallbackHandler
       def process
-        @bot.api.answer_callback_query(callback_query_id: @callback.id)
-        events = Event.upcoming
-        
-        handler = Bot::CallbackHandler.new(@bot, @callback, @session)
-        handler.send(:display_events, events, I18n.t('buttons.find_all'), I18n.t('no_upcoming_events'))
+        answer_callback_query
+        display_events(Event.upcoming, I18n.t('buttons.find_all'), I18n.t('no_upcoming_events'))
       end
     end
   end

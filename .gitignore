@@ -1,6 +1,7 @@
 # Игнорировать файлы с переменными окружения
 .env
 .env.*
+!.env.example
 
 # Игнорировать временные файлы
 *.swp
@@ -31,11 +32,5 @@ vendor/bundle
 .docker-sync/
 
 # Игнорировать файлы конфигурации сервера
-velo-utro-bot.service
-SYSTEMD_SERVICE.md
-TROUBLESHOOTING.md
 deep_scheduler_analysis.sh
 restart_scheduler_with_fix.sh
-
-# Игнорировать файл с описанием проекта для нейросетей
-PROJECT_DESCRIPTION.md

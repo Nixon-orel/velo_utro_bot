@@ -3,7 +3,7 @@ require_relative 'command_handler'
 
 module Bot
   module Commands
-    Dir[File.join(File.dirname(__FILE__), 'commands', '*.rb')].each do |file|
+    Dir[File.join(File.dirname(__FILE__), 'commands', '*.rb')].sort.each do |file|
       require file
     end
     

@@ -6,71 +6,74 @@ class EventWeatherService
     event_date = Date.parse(session.new_event['date'])
     event_time = session.new_event['time']
     
-    begin
-      weather_data = WeatherService.fetch_weather_for_event(coordinates, event_date, event_time)
-      
-      if weather_data
-        lat, lon = coordinates.split(',')
-        
-        event = create_event(session, {
-          weather_city: city_name,
-          latitude: lat.to_f,
-          longitude: lon.to_f,
-          weather_data: weather_data,
-          weather_updated_at: Time.current
-        })
-        
-        schedule_weather_updates(event)
-        
-        recommendations = WeatherRecommendations.generate(weather_data, event_time)
-        weather_info = format_weather_info(weather_data, recommendations, city_name)
-        
-        puts "[EventWeatherService] Event #{event.id} created successfully with weather data"
-        { success: true, event: event, weather_info: weather_info }
-      else
-        event = create_event(session)
-        puts "[EventWeatherService] Event #{event.id} created without weather data (API unavailable)"
-        { success: false, event: event, weather_info: nil }
-      end
-    rescue => e
-      puts "[EventWeatherService] Error creating event with weather: #{e.message}"
-      puts e.backtrace.first(3).join("\n") if ENV['WEATHER_DEBUG'] == 'true'
-      
-      event = create_event(session)
-      { success: false, event: event, weather_info: nil, error: e.message }
+    weather_data = fetch_weather(coordinates, event_date, event_time)
+    weather_attributes = build_weather_attributes(weather_data, coordinates, city_name)
+    result = Events::CreateEvent.from_session(session: session, extra_attributes: weather_attributes)
+    return result if result.failure?
+
+    event = result.value
+    weather_info = build_weather_info(weather_data, event_time, city_name)
+    schedule_error = schedule_weather_updates(event) if weather_data
+
+    if weather_data
+      AppLogger.info('EventWeatherService', 'Event created with weather data', event_id: event.id)
+    else
+      AppLogger.warn('EventWeatherService', 'Event created without weather data', event_id: event.id)
     end
+
+    ServiceResult.success(
+      event,
+      weather_available: !weather_data.nil?,
+      weather_info: weather_info,
+      schedule_error: schedule_error
+    )
+  rescue Date::Error, TypeError => e
+    ServiceResult.failure(:invalid_date, error: e)
+  rescue => e
+    AppLogger.error('EventWeatherService', 'Failed before event persistence', exception: e)
+    ServiceResult.failure(:weather_preparation_failed, error: e)
   end
   
   private
+
+  def self.fetch_weather(coordinates, event_date, event_time)
+    WeatherService.fetch_weather_for_event(coordinates, event_date, event_time)
+  rescue => e
+    AppLogger.error('EventWeatherService', 'Weather lookup failed; creating event without weather', exception: e)
+    nil
+  end
   
-  def self.create_event(session, weather_attrs = {})
-    event_attrs = {
-      date: Date.parse(session.new_event['date']),
-      time: session.new_event['time'],
-      event_type: session.new_event['type'],
-      location: session.new_event['location'],
-      distance: session.new_event['distance'],
-      pace: session.new_event['pace'],
-      track: session.new_event['track'],
-      map: session.new_event['map'],
-      additional_info: session.new_event['additional_info'],
-      author_id: session.new_event['author_id']
+  def self.build_weather_attributes(weather_data, coordinates, city_name)
+    return {} unless weather_data
+
+    lat, lon = coordinates.split(',')
+    {
+      weather_city: city_name,
+      latitude: lat.to_f,
+      longitude: lon.to_f,
+      weather_data: weather_data,
+      weather_updated_at: AppClock.now
     }
-    
-    event_attrs.merge!(weather_attrs)
-    event = Event.new(event_attrs)
-    event.save
-    event
+  end
+
+  def self.build_weather_info(weather_data, event_time, city_name)
+    return nil unless weather_data
+
+    recommendations = WeatherRecommendations.generate(weather_data, event_time)
+    format_weather_info(weather_data, recommendations, city_name)
+  rescue => e
+    AppLogger.error('EventWeatherService', 'Failed to format weather information', exception: e)
+    nil
   end
   
   def self.format_weather_info(weather_data, recommendations, city_name)
-    temp = weather_data[:temp_c] || weather_data['temp_c']
-    feels_like = weather_data[:feelslike_c] || weather_data['feelslike_c']
-    condition = weather_data[:condition] || weather_data['condition']
-    wind_speed = weather_data[:wind_kph] || weather_data['wind_kph']
-    precip_prob = weather_data[:precip_prob] || weather_data['precip_prob']
-    is_fallback = weather_data[:is_fallback] || weather_data['is_fallback']
-    fallback_from = weather_data[:fallback_from] || weather_data['fallback_from']
+    temp = weather_data['temp_c']
+    feels_like = weather_data['feelslike_c']
+    condition = weather_data['condition']
+    wind_speed = weather_data['wind_kph']
+    precip_prob = weather_data['precip_prob']
+    is_fallback = weather_data['is_fallback']
+    fallback_from = weather_data['fallback_from']
     
     weather_text = if city_name == I18n.t('custom_coordinates')
       "🌤️ Погода по координатам:\n#{condition}, #{temp}°C"
@@ -97,5 +100,9 @@ class EventWeatherService
   def self.schedule_weather_updates(event)
     require_relative '../bot/helpers/weather_scheduler'
     Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
+    nil
+  rescue => e
+    AppLogger.error('EventWeatherService', 'Failed to schedule weather updates', event_id: event.id, exception: e)
+    e
   end
 end

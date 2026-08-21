@@ -2,13 +2,8 @@ module Bot
   module Callbacks
     class Edit < Bot::CallbackHandler
       def process
-        event = get_event
+        event = get_authorized_event
         return unless event
-        
-        unless event.author_id == @user.id
-          answer_callback_query(I18n.t('not_author'), show_alert: true)
-          return
-        end
         
         buttons = [
           [

@@ -25,8 +25,28 @@ module Bot
     def get_event
       event_id = get_event_id
       return nil unless event_id
-      
-      Event.find_by(id: event_id)
+
+      event = Event.find_by(id: event_id)
+      return event if event
+
+      answer_callback_query(I18n.t('invalid_input'), show_alert: true)
+      nil
+    end
+
+    def get_authorized_event
+      event = get_event
+      return unless event
+      return event if Events::Policy.manage?(event: event, actor: @user)
+
+      answer_callback_query(I18n.t('not_author'), show_alert: true)
+      nil
+    end
+
+    def prepare_event_edit(event, state, calendar_type: nil)
+      @session.edit_event_id = event.id
+      @session.state = state
+      @session.calendar_type = calendar_type if calendar_type
+      @session.save_session
     end
   end
 end

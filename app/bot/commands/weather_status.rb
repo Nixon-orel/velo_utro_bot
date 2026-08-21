@@ -28,35 +28,31 @@ module Bot
       def check_scheduler_status
         require_relative '../helpers/weather_scheduler'
         
-        if ENV['WEATHER_ENABLED'] != 'true'
+        unless APP_CONFIG.weather_enabled?
           return "❌ Отключен (WEATHER_ENABLED != true)"
         end
         
         begin
-          scheduler = Bot::Helpers::WeatherScheduler.class_variable_get(:@@scheduler)
-          
-          if scheduler.nil?
+          status = Bot::Helpers::WeatherScheduler.status
+
+          unless status[:scheduler_running]
             return "❌ Не инициализирован"
           end
-          
-          if scheduler.up?
-            running_jobs = scheduler.jobs.size
-            return "✅ Активен\n📊 Задач в очереди: #{running_jobs}"
-          else
-            return "❌ Остановлен"
-          end
+
+          lock_status = status[:lock_held] ? 'удерживается' : 'не удерживается'
+          "✅ Активен\n📊 Задач в очереди: #{status[:jobs_count]}\n🔒 Блокировка: #{lock_status}"
         rescue => e
           return "⚠️ Ошибка проверки: #{e.message}"
         end
       end
       
       def check_api_status
-        if ENV['WEATHER_API_KEY'].nil? || ENV['WEATHER_API_KEY'].empty?
+        if APP_CONFIG.weather_api_key.to_s.empty?
           return "❌ API ключ не установлен"
         end
         
-        default_coords = ENV['DEFAULT_WEATHER_COORDINATES']
-        default_city = ENV['DEFAULT_WEATHER_CITY_NAME'] || 'неизвестный город'
+        default_coords = APP_CONFIG.default_weather_coordinates
+        default_city = APP_CONFIG.default_weather_city
         
         if default_coords.nil? || default_coords.empty?
           return "❌ Координаты по умолчанию не установлены"
@@ -65,14 +61,15 @@ module Bot
         begin
           require_relative '../../services/weather_service'
           
-          start_time = Time.now
+          started_at = Process.clock_gettime(Process::CLOCK_MONOTONIC)
           coords_clean = default_coords.gsub(/\s+/, '')
-          weather_data = WeatherService.fetch_weather_for_event(coords_clean, Date.today, Time.now.strftime("%H:%M"))
-          response_time = ((Time.now - start_time) * 1000).round
+          weather_data = WeatherService.fetch_weather_for_event(coords_clean, AppClock.today, AppClock.now.strftime("%H:%M"))
+          elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started_at
+          response_time = (elapsed * 1000).round
           
           if weather_data
-            temp = weather_data[:temp_c]
-            condition = weather_data[:condition]
+            temp = weather_data['temp_c']
+            condition = weather_data['condition']
             return "✅ Доступен\n🏙️ #{default_city}: #{condition}, #{temp}°C\n⏱️ Время ответа: #{response_time}мс"
           else
             return "⚠️ API отвечает, но данные отсутствуют"

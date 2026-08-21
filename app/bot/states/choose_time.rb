@@ -4,12 +4,12 @@ module Bot
       def process
         time = @message.text
         
-        unless validate_input(time, /^\d{2}:\d{2}(\s?-\s?\d{2}:\d{2})?$/)
+        unless EventTime.valid_input?(time)
           send_message(I18n.t('invalid_input'))
           return
         end
         
-        save_event_attribute('time', time)
+        save_event_attribute('time', time.strip)
         transition_to_state('choose_type')
         
         buttons = create_event_type_buttons

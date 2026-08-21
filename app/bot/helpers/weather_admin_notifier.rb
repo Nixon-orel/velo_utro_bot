@@ -1,23 +1,27 @@
 module Bot
   module Helpers
     class WeatherAdminNotifier
-      def self.send_alert(level, message, data)
-        return unless CONFIG['ADMIN_USER_IDS'].is_a?(Array)
+      def initialize(bot)
+        @gateway = Notifications::TelegramGateway.new(bot)
+      end
+
+      def send_alert(level, message, data)
+        return if APP_CONFIG.admin_ids.empty?
         
         alert_message = format_alert_message(level, message, data)
         
-        CONFIG['ADMIN_USER_IDS'].each do |admin_id|
+        APP_CONFIG.admin_ids.each do |admin_id|
           send_admin_message(admin_id, alert_message)
         end
       rescue => e
-        puts "[WeatherAdminNotifier] Error sending admin alert: #{e.message}"
+        AppLogger.error('Bot::Helpers::WeatherAdminNotifier', 'Failed to send admin alert', exception: e)
       end
       
       private
       
-      def self.format_alert_message(level, message, data)
+      def format_alert_message(level, message, data)
         emoji = level == :error ? "🚨" : "⚠️"
-        timestamp = Time.now.strftime("%H:%M:%S")
+        timestamp = AppClock.now.strftime("%H:%M:%S")
         
         alert_text = "#{emoji} <b>Weather System Alert</b>\n"
         alert_text += "🕐 #{timestamp}\n"
@@ -54,24 +58,21 @@ module Bot
         alert_text
       end
       
-      def self.send_admin_message(admin_id, message)
-        return unless defined?(Rails) || defined?(Sinatra) || $bot_instance
-        
-        bot = $bot_instance || get_bot_instance
-        return unless bot
-        
-        bot.api.send_message(
+      def send_admin_message(admin_id, message)
+        @gateway.send_message(
           chat_id: admin_id,
           text: message,
           parse_mode: 'HTML'
         )
       rescue => e
-        puts "[WeatherAdminNotifier] Failed to send message to admin #{admin_id}: #{e.message}"
+        AppLogger.error(
+          'Bot::Helpers::WeatherAdminNotifier',
+          'Failed to notify admin',
+          admin_id: admin_id,
+          exception: e
+        )
       end
       
-      def self.get_bot_instance
-        Thread.current[:bot] rescue nil
-      end
     end
   end
 end

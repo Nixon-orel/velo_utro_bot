@@ -3,7 +3,7 @@ require_relative 'state_handler'
 
 module Bot
   module States
-    Dir[File.join(File.dirname(__FILE__), 'states', '*.rb')].each do |file|
+    Dir[File.join(File.dirname(__FILE__), 'states', '*.rb')].sort.each do |file|
       require file
     end
     

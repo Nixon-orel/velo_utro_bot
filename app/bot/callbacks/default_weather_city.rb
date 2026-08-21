@@ -2,17 +2,38 @@ module Bot
   module Callbacks
     class DefaultWeatherCity < Bot::CallbackHandler
       def process
-        event_id = get_event_id
-        event = get_event
+        event = get_authorized_event
         return unless event
 
-        default_coordinates = ENV['DEFAULT_WEATHER_COORDINATES'] || '52.9651,36.0785'
-        default_city = ENV['DEFAULT_WEATHER_CITY_NAME'] || 'Орёл'
+        default_coordinates = APP_CONFIG.default_weather_coordinates
+        default_city = APP_CONFIG.default_weather_city
         
-        update_event_weather(event, default_coordinates, default_city)
+        result = update_event_weather(event, default_coordinates, default_city)
+        unless result.success?
+          AppLogger.error(
+            'Bot::Callbacks::DefaultWeatherCity',
+            'Failed to update event weather',
+            event_id: event.id,
+            error_code: result.error_code,
+            exception: result.error
+          )
+          answer_callback_query(I18n.t('invalid_input'), show_alert: true)
+          return
+        end
+
+        if event.weather_data.present?
+          Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
+        else
+          Bot::Helpers::WeatherScheduler.cancel_for(event.id)
+        end
         
         transition_to_state(nil)
-        answer_callback_query("Прогноз обновлен")
+        callback_message = if event.weather_data.present?
+          'Прогноз обновлен'
+        else
+          'Город обновлен, но прогноз получить не удалось'
+        end
+        answer_callback_query(callback_message)
         
         message = Bot::Helpers::Formatter.event_info(event)
         buttons = [
@@ -40,21 +61,15 @@ module Bot
         lat, lon = coordinates.split(',')
         weather_data = WeatherService.fetch_weather_for_event(coordinates, event.date, event.time)
         
-        if weather_data
-          event.update(
-            weather_city: city_name,
-            latitude: lat.to_f,
-            longitude: lon.to_f,
-            weather_data: weather_data,
-            weather_updated_at: Time.current
-          )
-        else
-          event.update(
-            weather_city: city_name,
-            latitude: lat.to_f,
-            longitude: lon.to_f
-          )
-        end
+        changes = {
+          weather_city: city_name,
+          latitude: lat.to_f,
+          longitude: lon.to_f,
+          weather_data: weather_data || {},
+          weather_updated_at: weather_data ? AppClock.now : nil
+        }
+
+        Events::EditEvent.call(event: event, actor: @user, changes: changes)
       end
       
       def transition_to_state(state)

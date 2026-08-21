@@ -4,9 +4,8 @@ module Bot
       def process
         answer_callback_query
         
-        today = Date.today
-        tomorrow = today + 1
-        events = Event.for_period(today, tomorrow)
+        today = AppClock.today
+        events = Event.on_date(today)
         
         display_events(events, I18n.t('buttons.find_today'), I18n.t('no_events_today'))
       end

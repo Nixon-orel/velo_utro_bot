@@ -31,7 +31,7 @@ Veloutro Bot позволяет пользователям создавать м
 1. Клонируйте репозиторий:
 
 ```bash
-git clone https://github.com/nixon-orel/velo_utro_bot.git
+git clone git@github.com:Nixon-orel/velo_utro_bot.git
 cd velo_utro_bot
 ```
 
@@ -58,59 +58,15 @@ cp .env.example .env
 
 ### Запуск
 
-#### Настройка переменных окружения:
+#### Настройка переменных окружения
 
-Создайте файл `.env` со следующим содержимым:
-```
-# Telegram Bot Token
-TG_TOKEN=ваш_токен_телеграм_бота
-
-# Database Configuration
-DB_USER=postgres
-DB_PASSWORD=postgres
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=velo_utro_bot_development
-
-# Application Configuration
-RACK_ENV=development
-PORT=4567
-PUBLIC_CHANNEL_ID=ваш_id_канала
-BOT_USERNAME=имя_вашего_бота
-
-# Admin IDs (comma-separated)
-ADMIN_IDS=ваши_admin_id
-
-# Static Events (comma-separated)
-STATIC_EVENTS=Встреча,Обсуждение
-
-# Daily Announcement Settings
-DAILY_ANNOUNCEMENT_ENABLED=true
-DAILY_ANNOUNCEMENT_TIME=18:30  # UTC время (21:30 Moscow Time)
-
-# Monthly Statistics Settings
-MONTHLY_STATS_DAY=1  # день месяца для отправки статистики (1-28), отправка в 09:00 UTC
-
-# Timezone Settings
-TIMEZONE=Europe/Moscow
-
-# Weather Integration Settings (optional)
-WEATHER_API_KEY=your_weatherapi_key_here
-WEATHER_ENABLED=true
-DEFAULT_WEATHER_COORDINATES=52.9651,36.0785
-DEFAULT_WEATHER_CITY_NAME=Орёл
-WEATHER_ADMIN_ALERTS=true
-WEATHER_DEBUG=false
-
-# Webhook Settings (optional, for production)
-WEBHOOK_DOMAIN=https://your-domain.com
-```
+Актуальный шаблон со всеми поддерживаемыми переменными находится в `.env.example`. Для запуска бота обязателен `TG_TOKEN`; для работы с публикациями также нужен `PUBLIC_CHANNEL_ID`.
 
 **Описание переменных окружения:**
 
 - `TG_TOKEN` - токен Telegram бота (получается от @BotFather)
 - `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` - настройки подключения к PostgreSQL
-- `PUBLIC_CHANNEL_ID` - ID публичного канала для анонсов (можно указать несколько через запятую)
+- `PUBLIC_CHANNEL_ID` - ID одного публичного канала для публикаций и анонсов
 - `BOT_USERNAME` - имя пользователя бота без @ (например, VeloutroBot)
 - `ADMIN_IDS` - список Telegram ID администраторов через запятую
 - `STATIC_EVENTS` - типы статических мероприятий (без скорости/расстояния)
@@ -123,9 +79,9 @@ WEBHOOK_DOMAIN=https://your-domain.com
 - `DEFAULT_WEATHER_COORDINATES` - координаты по умолчанию (формат "широта,долгота")
 - `DEFAULT_WEATHER_CITY_NAME` - название города по умолчанию
 - `WEATHER_ADMIN_ALERTS` - уведомления администраторов о проблемах с погодой (true/false)
-- `WEATHER_DEBUG` - подробное логирование операций с погодой (true/false)
+- `WEATHER_DEBUG` - включение DEBUG-уровня логов всего приложения в production для диагностики (true/false)
 
-#### Создание базы данных:
+#### Создание базы данных
 
 1. Создайте пользователя PostgreSQL:
 ```bash
@@ -134,26 +90,33 @@ sudo -u postgres -H createuser -s $USER
 
 2. Создайте базы данных:
 ```bash
-source .env
 createdb velo_utro_bot_development
 createdb velo_utro_bot_production
 ```
 
-#### Применение миграций:
+#### Применение миграций
 
 ```bash
-source .env
-bundle exec ruby migrate_only.rb
+bundle exec rake db:migrate
 ```
 
-#### Запуск бота:
+#### Запуск бота
 
 ```bash
-source .env
-bundle exec ruby app.rb
+bin/bot
 ```
 
-**Важно**: Всегда выполняйте `source .env` перед запуском команд, чтобы загрузить переменные окружения.
+Веб-приложение запускается отдельно:
+
+```bash
+bin/web
+```
+
+`ruby app.rb` оставлен как совместимая точка входа: в development он запускает бота, в production — веб-приложение.
+
+`bin/bot`, `bin/web` и Rake автоматически загружают `.env` через Dotenv. Шаблон `.env.example` не рассчитан на `source` в shell.
+
+После обновления кода всегда применяйте миграции до запуска runtime. Миграция `007` добавляет `events.published_at`, которое заполняется только после успешной отправки сообщения в Telegram.
 
 ## Команды бота
 
@@ -181,19 +144,28 @@ bundle exec ruby app.rb
 velo_utro_bot/
 ├── app/                    # Код приложения
 │   ├── bot/                # Код бота
+│   │   ├── runner.rb       # Подключение к Telegram и управление runtime
+│   │   ├── update_router.rb # Маршрутизация Telegram updates
 │   │   ├── callbacks/      # Обработчики callback-запросов
 │   │   ├── commands/       # Обработчики команд
-│   │   ├── handlers/       # Базовые классы обработчиков
+│   │   ├── handlers/       # Специализированные базовые обработчики
 │   │   ├── helpers/        # Вспомогательные классы
 │   │   ├── states/         # Обработчики состояний диалога
 │   │   ├── callbacks.rb    # Модуль для загрузки обработчиков callback-запросов
 │   │   ├── commands.rb     # Модуль для загрузки обработчиков команд
 │   │   └── states.rb       # Модуль для загрузки обработчиков состояний
 │   ├── models/             # Модели данных
-│   ├── services/           # Сервисы (погода, рекомендации)
-│   ├── controllers/        # Контроллеры (для веб-интерфейса)
-│   └── views/              # Представления (для веб-интерфейса)
+│   ├── services/           # Операции событий, Telegram gateway и погода
+│   ├── views/              # Представления веб-интерфейса
+│   └── web_app.rb          # Sinatra-приложение
+├── bin/
+│   ├── bot                 # Явный запуск Telegram runtime
+│   └── web                 # Явный запуск Sinatra runtime
 ├── config/                 # Конфигурационные файлы
+│   ├── environment.rb      # Загрузка классов без запуска runtime
+│   ├── app_config.rb       # Единая конфигурация приложения
+│   ├── app_clock.rb        # Время приложения в настроенном часовом поясе
+│   ├── app_logger.rb       # Единое контекстное логирование
 │   ├── environments/       # Настройки для разных окружений
 │   ├── initializers/       # Инициализаторы
 │   └── locales/            # Файлы локализации
@@ -203,15 +175,16 @@ velo_utro_bot/
 │       ├── 002_add_track_and_map_to_events.rb # Добавление полей track и map
 │       ├── 003_add_channel_message_id_to_events.rb # Добавление поля channel_message_id
 │       ├── 004_add_weather_fields_to_events.rb # Добавление полей для интеграции с погодой
-│       └── 005_add_published_to_events.rb # Добавление статуса публикации событий
+│       ├── 005_add_published_to_events.rb # Добавление статуса публикации событий
+│       ├── 006_add_subscribed_to_notifications_to_users.rb
+│       └── 007_add_published_at_to_events.rb # Время подтверждённой публикации
 ├── public/                 # Публичные файлы (для веб-интерфейса)
-├── .env                    # Переменные окружения
+├── .env.example            # Шаблон переменных окружения
 ├── .gitignore              # Файлы, исключенные из системы контроля версий
 ├── app.rb                  # Основной файл приложения
 ├── Gemfile                 # Зависимости проекта
 ├── Gemfile.lock            # Фиксированные версии зависимостей
 ├── Rakefile                # Задачи Rake
-├── REFACTORING_PLAN.md     # План рефакторинга кода
 └── README.md               # Документация проекта
 ```
 
@@ -244,8 +217,8 @@ velo_utro_bot/
 ### Добавление новых команд
 
 1. Создайте новый файл в директории `app/bot/commands/` с именем команды
-2. Наследуйте класс от `Bot::CommandHandler` или `Bot::Handlers::InfoCommandHandler` (для информационных команд)
-3. Реализуйте метод `execute` (или `message_key` для InfoCommandHandler)
+2. Наследуйте класс от `Bot::CommandHandler` или `Bot::Handlers::InfoCommandHandler` для простой информационной команды
+3. Реализуйте `execute` или `message_key` соответственно
 
 **Пример информационной команды:**
 ```ruby
@@ -255,9 +228,9 @@ module Bot
   module Commands
     class MyCommand < Bot::Handlers::InfoCommandHandler
       private
-      
+
       def message_key
-        'my_command'  # ключ в config/locales/ru.yml
+        'my_command'
       end
     end
   end

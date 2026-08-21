@@ -3,283 +3,239 @@ require 'rufus-scheduler'
 module Bot
   module Helpers
     class Scheduler
-      @@global_scheduler = nil
-      @@daily_job = nil
-      @@monthly_job = nil
-      @@cron_expression = nil
-      @@mutex = Mutex.new
-      @@lock_file = nil
       LOCK_FILE_PATH = '/tmp/velo_utro_bot_scheduler.lock'
-      
-      def self.start(bot)
-        return unless CONFIG['DAILY_ANNOUNCEMENT_ENABLED'] || ENV['MONTHLY_STATS_DAY']
-        
-        @@mutex.synchronize do
-          if acquire_lock
-            stop_internal
-            
-            if @@global_scheduler && !@@global_scheduler.down?
-              @@global_scheduler.shutdown
-              puts "[PID #{Process.pid}] Previous scheduler shutdown completed"
+      LAST_ANNOUNCEMENT_PATH = '/tmp/velo_utro_bot_last_announcement'
+      LAST_MONTHLY_STATS_PATH = '/tmp/velo_utro_bot_last_monthly_stats'
+
+      @scheduler = nil
+      @daily_job = nil
+      @monthly_job = nil
+      @cron_expression = nil
+      @mutex = Mutex.new
+      @lock_file = nil
+
+      class << self
+        def start(bot)
+          return false unless enabled?
+
+          @mutex.synchronize do
+            return true if @scheduler&.up?
+
+            unless acquire_lock
+              log(:warn, 'Another scheduler instance holds the lock; startup skipped')
+              return false
             end
-            
-            @@global_scheduler = Rufus::Scheduler.new(timezone: 'UTC')
-            puts "[PID #{Process.pid}] New scheduler instance created in UTC"
-            
-            if CONFIG['DAILY_ANNOUNCEMENT_ENABLED']
-              time = CONFIG['DAILY_ANNOUNCEMENT_TIME']
-              hour, minute = time.split(':').map(&:to_i)
-              
-              puts "[PID #{Process.pid}] Starting daily announcement scheduler"
-              puts "[PID #{Process.pid}] Configured UTC time: #{time}"
-              puts "[PID #{Process.pid}] Parsed hour: #{hour}, minute: #{minute}"
-              puts "[PID #{Process.pid}] Current UTC time: #{Time.now.utc}"
-              
-              cron_expression = "#{minute} #{hour} * * *"
-              puts "[PID #{Process.pid}] Cron expression: #{cron_expression}"
-              
-              @@cron_expression = cron_expression
-              puts "[PID #{Process.pid}] Creating cron job in UTC"
-              @@daily_job = @@global_scheduler.cron cron_expression do
-                send_daily_announcement(bot)
-              end
-            end
-            
-            if ENV['MONTHLY_STATS_DAY']
-              stats_day = ENV['MONTHLY_STATS_DAY'].to_i
-              stats_day = 28 if stats_day > 28
-              stats_day = 1 if stats_day < 1
-              
-              puts "[PID #{Process.pid}] Starting monthly statistics scheduler for day #{stats_day}"
-              
-              stats_cron = "0 9 #{stats_day} * *"
-              puts "[PID #{Process.pid}] Statistics cron expression: #{stats_cron}"
-              
-              @@monthly_job = @@global_scheduler.cron stats_cron do
-                send_monthly_statistics(bot)
-              end
-            end
-            
-            puts "[PID #{Process.pid}] Schedulers started successfully"
-          else
-            puts "[PID #{Process.pid}] Another scheduler instance is already running, skipping..."
+
+            @scheduler = Rufus::Scheduler.new
+            schedule_daily_announcement(bot) if APP_CONFIG.daily_announcement_enabled?
+            schedule_monthly_statistics(bot) if APP_CONFIG.monthly_stats_day
           end
-        end
-      end
-      
-      def self.stop
-        stop_internal
-        release_lock
-      end
-      
-      def self.status
-        @@mutex.synchronize do
-          daily_job_active = !@@daily_job.nil?
-          monthly_job_active = !@@monthly_job.nil?
-          next_run = nil
-          
-          if daily_job_active && @@cron_expression
-            begin
-              next_run = calculate_next_run(@@cron_expression)
-            rescue => e
-              puts "[PID #{Process.pid}] Error calculating next run: #{e.message}"
-            end
-          end
-          
-          {
-            scheduler_running: @@global_scheduler && !@@global_scheduler.down?,
-            daily_job_active: daily_job_active,
-            monthly_job_active: monthly_job_active,
-            next_run: next_run,
-            cron_expression: @@cron_expression,
-            jobs_count: @@global_scheduler&.jobs&.count || 0,
-            lock_file_exists: File.exist?(LOCK_FILE_PATH)
-          }
-        end
-      end
-      
-      private
-      
-      def self.stop_internal
-        if @@daily_job
-          if @@daily_job.respond_to?(:unschedule)
-            @@daily_job.unschedule
-            puts "[PID #{Process.pid}] Daily job unscheduled"
-          else
-            puts "[PID #{Process.pid}] Daily job object is not valid (#{@@daily_job.class}): #{@@daily_job}"
-          end
-          @@daily_job = nil
-        end
-        
-        if @@monthly_job
-          if @@monthly_job.respond_to?(:unschedule)
-            @@monthly_job.unschedule
-            puts "[PID #{Process.pid}] Monthly job unscheduled"
-          else
-            puts "[PID #{Process.pid}] Monthly job object is not valid (#{@@monthly_job.class}): #{@@monthly_job}"
-          end
-          @@monthly_job = nil
-        end
-        
-        if @@global_scheduler && !@@global_scheduler.down?
-          begin
-            jobs_count = @@global_scheduler.jobs.count
-            @@global_scheduler.jobs.each(&:unschedule)
-            puts "[PID #{Process.pid}] Unscheduled #{jobs_count} jobs from scheduler"
-          rescue => e
-            puts "[PID #{Process.pid}] Error unscheduling jobs: #{e.message}"
-          end
-          
-          @@global_scheduler.shutdown
-          @@global_scheduler = nil
-          puts "[PID #{Process.pid}] Scheduler stopped and cleared"
-        end
-      end
-      
-      def self.acquire_lock
-        begin
-          @@lock_file = File.open(LOCK_FILE_PATH, File::RDWR | File::CREAT, 0644)
-          if @@lock_file.flock(File::LOCK_EX | File::LOCK_NB)
-            @@lock_file.write(Process.pid.to_s)
-            @@lock_file.flush
-            true
-          else
-            @@lock_file.close
-            @@lock_file = nil
-            false
-          end
+
+          log(:info, 'Schedulers started')
+          true
         rescue => e
-          puts "[PID #{Process.pid}] Error acquiring lock: #{e.message}"
+          log(:error, 'Failed to start schedulers', exception: e)
+          stop
           false
         end
-      end
-      
-      def self.release_lock
-        if @@lock_file
-          @@lock_file.flock(File::LOCK_UN)
-          @@lock_file.close
-          File.delete(LOCK_FILE_PATH) if File.exist?(LOCK_FILE_PATH)
-          @@lock_file = nil
-          puts "[PID #{Process.pid}] Lock released"
+
+        def stop
+          scheduler, lock_file = @mutex.synchronize do
+            current_scheduler = @scheduler
+            current_lock_file = @lock_file
+            @scheduler = nil
+            @daily_job = nil
+            @monthly_job = nil
+            @cron_expression = nil
+            @lock_file = nil
+            [current_scheduler, current_lock_file]
+          end
+
+          begin
+            scheduler.shutdown if scheduler&.up?
+          ensure
+            release_lock(lock_file)
+          end
+          log(:info, 'Scheduler stopped') if scheduler || lock_file
         end
-      end
-      
-      def self.parse_time(time_string)
-        hour, minute = time_string.split(':').map(&:to_i)
-        "#{minute} #{hour}"
-      end
-      
-      def self.send_daily_announcement(bot)
-        begin
-          return unless @@lock_file
-          
-          unless File.exist?(LOCK_FILE_PATH)
-            puts "[PID #{Process.pid}] Lock file disappeared, aborting announcement"
-            return
+
+        def status
+          @mutex.synchronize do
+            {
+              scheduler_running: @scheduler&.up? || false,
+              daily_job_active: !@daily_job.nil?,
+              monthly_job_active: !@monthly_job.nil?,
+              next_run: calculate_next_run(@cron_expression),
+              cron_expression: @cron_expression,
+              jobs_count: @scheduler&.jobs&.count || 0,
+              lock_held: lock_held?
+            }
           end
-          
-          current_time = Time.now.utc
-          puts "[#{current_time}] [PID #{Process.pid}] Sending daily announcement..."
-          
-          last_announcement_file = '/tmp/velo_utro_bot_last_announcement'
-          if File.exist?(last_announcement_file)
-            last_announcement_time = File.read(last_announcement_file).to_i
-            time_since_last = current_time.to_i - last_announcement_time
-            
-            if time_since_last < 20 * 3600
-              puts "[#{current_time}] [PID #{Process.pid}] Skipping announcement - too soon since last one"
-              puts "[#{current_time}] [PID #{Process.pid}] Time since last: #{time_since_last}s (#{(time_since_last/3600.0).round(2)} hours)"
-              return
-            end
+        rescue => e
+          log(:error, 'Failed to read scheduler status', exception: e)
+          {
+            scheduler_running: false,
+            daily_job_active: false,
+            monthly_job_active: false,
+            next_run: nil,
+            cron_expression: nil,
+            jobs_count: 0,
+            lock_held: false
+          }
+        end
+
+        private
+
+        def enabled?
+          APP_CONFIG.daily_announcement_enabled? || APP_CONFIG.monthly_stats_day
+        end
+
+        def schedule_daily_announcement(bot)
+          time = APP_CONFIG.daily_announcement_time
+          hour, minute = time.split(':').map(&:to_i)
+          @cron_expression = "#{minute} #{hour} * * * UTC"
+          @daily_job = @scheduler.schedule_cron(@cron_expression) { send_daily_announcement(bot) }
+          log(:info, 'Daily announcement scheduled', configured_time: time, cron_expression: @cron_expression)
+        end
+
+        def schedule_monthly_statistics(bot)
+          stats_day = APP_CONFIG.monthly_stats_day
+          cron_expression = "0 9 #{stats_day} * * UTC"
+          @monthly_job = @scheduler.schedule_cron(cron_expression) { send_monthly_statistics(bot) }
+          log(:info, 'Monthly statistics scheduled', day: stats_day, cron_expression: cron_expression)
+        end
+
+        def acquire_lock
+          @lock_file = File.open(LOCK_FILE_PATH, File::RDWR | File::CREAT, 0o644)
+          unless @lock_file.flock(File::LOCK_EX | File::LOCK_NB)
+            @lock_file.close
+            @lock_file = nil
+            return false
           end
-          
-          events = Event.next_24_hours.select(&:published)
-          
-          channel_id = CONFIG['PUBLIC_CHANNEL_ID']
-          return unless channel_id
-          
+
+          @lock_file.rewind
+          @lock_file.truncate(0)
+          @lock_file.write(Process.pid.to_s)
+          @lock_file.flush
+          true
+        rescue => e
+          log(:error, 'Failed to acquire scheduler lock', exception: e)
+          @lock_file&.close
+          @lock_file = nil
+          false
+        end
+
+        def release_lock(lock_file)
+          return unless lock_file
+
+          lock_file.flock(File::LOCK_UN)
+          lock_file.close
+          log(:info, 'Scheduler lock released')
+        rescue => e
+          log(:error, 'Failed to release scheduler lock', exception: e)
+        end
+
+        def send_daily_announcement(bot)
+          unless scheduler_lock_alive?
+            log(:warn, 'Scheduler lock disappeared; announcement aborted')
+            return false
+          end
+
+          current_time = AppClock.utc_now
+          if recent_announcement?(current_time)
+            log(:info, 'Daily announcement skipped because the previous one was recent')
+            return false
+          end
+
+          channel_id = APP_CONFIG.public_channel_id
+          return false if channel_id.to_s.empty?
+
+          events = Event.next_24_hours.select(&:published?)
+          send_announcement_messages(bot, channel_id, events)
+          File.write(LAST_ANNOUNCEMENT_PATH, current_time.to_i.to_s)
+          log(:info, 'Daily announcement sent', events_count: events.count)
+          true
+        rescue => e
+          log(:error, 'Failed to send daily announcement', exception: e)
+          false
+        end
+
+        def scheduler_lock_alive?
+          lock_held?
+        end
+
+        def lock_held?
+          @lock_file && !@lock_file.closed?
+        end
+
+        def recent_announcement?(current_time)
+          return false unless File.exist?(LAST_ANNOUNCEMENT_PATH)
+
+          last_time = File.read(LAST_ANNOUNCEMENT_PATH).to_i
+          current_time.to_i - last_time < 20.hours
+        end
+
+        def send_announcement_messages(bot, channel_id, events)
           if events.empty?
             bot.api.send_message(
               chat_id: channel_id,
               text: I18n.t('daily_announcement_no_events'),
               parse_mode: 'HTML'
             )
-          else
+            return
+          end
+
+          bot.api.send_message(
+            chat_id: channel_id,
+            text: I18n.t('daily_announcement_header'),
+            parse_mode: 'HTML'
+          )
+          events.each do |event|
             bot.api.send_message(
               chat_id: channel_id,
-              text: I18n.t('daily_announcement_header'),
+              text: Bot::Helpers::Formatter.event_info(event),
               parse_mode: 'HTML'
             )
-            
-            events.each do |event|
-              message = Bot::Helpers::Formatter.event_info(event)
-              
-              bot.api.send_message(
-                chat_id: channel_id,
-                text: message,
-                parse_mode: 'HTML'
-              )
-            end
           end
-          
-          File.write(last_announcement_file, current_time.to_i.to_s)
-          
-          puts "[#{current_time}] [PID #{Process.pid}] Daily announcement sent successfully"
-        rescue => e
-          current_time = Time.now.utc
-          puts "[#{current_time}] [PID #{Process.pid}] Error sending daily announcement: #{e.message}"
-          puts e.backtrace.join("\n")
         end
-      end
-      
-      def self.send_monthly_statistics(bot)
-        begin
-          current_time = Time.now.utc
-          puts "[#{current_time}] [PID #{Process.pid}] Sending monthly statistics..."
-          
-          last_stats_file = '/tmp/velo_utro_bot_last_monthly_stats'
-          previous_month_date = Date.today - 1.month
-          stats_period = "#{previous_month_date.year}-#{previous_month_date.month}"
-          
-          if File.exist?(last_stats_file)
-            last_stats_month = File.read(last_stats_file).strip
-            if last_stats_month == stats_period
-              puts "[#{current_time}] [PID #{Process.pid}] Statistics for #{stats_period} already sent"
-              return
-            end
-          end
-          
-          puts "[#{current_time}] [PID #{Process.pid}] Generating statistics for period: #{stats_period}"
-          
+
+        def send_monthly_statistics(bot)
+          previous_month = AppClock.today - 1.month
+          stats_period = "#{previous_month.year}-#{previous_month.month}"
+          return false if monthly_statistics_sent?(stats_period)
+
           statistics = Bot::Helpers::Statistics.new(bot)
-          statistics.send_monthly_report
-          
-          File.write(last_stats_file, stats_period)
-          
-          puts "[#{current_time}] [PID #{Process.pid}] Monthly statistics for #{stats_period} sent successfully"
+          unless statistics.send_monthly_report
+            log(:warn, 'Monthly statistics were not sent', period: stats_period)
+            return false
+          end
+
+          File.write(LAST_MONTHLY_STATS_PATH, stats_period)
+          log(:info, 'Monthly statistics sent', period: stats_period)
+          true
         rescue => e
-          puts "[#{current_time}] [PID #{Process.pid}] Error sending monthly statistics: #{e.message}"
-          puts e.backtrace.join("\n")
-        end
-      end
-      
-      def self.calculate_next_run(cron_expression)
-        return nil unless cron_expression
-
-        parts = cron_expression.split(' ')
-        return nil if parts.length < 5
-
-        minute = parts[0].to_i
-        hour = parts[1].to_i
-        
-        now = Time.now.utc
-        next_run = Time.utc(now.year, now.month, now.day, hour, minute)
-        
-        if next_run <= now
-          next_run += 1.day
+          log(:error, 'Failed to send monthly statistics', exception: e)
+          false
         end
 
-        next_run
+        def monthly_statistics_sent?(stats_period)
+          return false unless File.exist?(LAST_MONTHLY_STATS_PATH)
+
+          File.read(LAST_MONTHLY_STATS_PATH).strip == stats_period
+        end
+
+        def calculate_next_run(cron_expression)
+          return nil unless cron_expression
+
+          minute, hour = cron_expression.split(' ').first(2).map(&:to_i)
+          now = AppClock.utc_now
+          next_run = Time.utc(now.year, now.month, now.day, hour, minute)
+          next_run <= now ? next_run + 1.day : next_run
+        end
+
+        def log(level, message, **context)
+          AppLogger.public_send(level, 'Bot::Helpers::Scheduler', message, pid: Process.pid, **context)
+        end
       end
     end
   end

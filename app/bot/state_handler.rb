@@ -29,23 +29,14 @@ module Bot
     
     def create_event_type_buttons
       buttons = []
-      CONFIG['EVENT_TYPES'].each do |type|
+      APP_CONFIG.event_types.each do |type|
         buttons << [create_button(type, type)]
       end
       buttons
     end
     
     def static_event?(event_type)
-      static_events = CONFIG['STATIC_EVENTS']
-      return false unless static_events
-      
-      if static_events.is_a?(Array)
-        static_events.include?(event_type)
-      elsif static_events.is_a?(String)
-        static_events.split(',').map(&:strip).include?(event_type)
-      else
-        false
-      end
+      APP_CONFIG.static_events.include?(event_type)
     end
   end
 end

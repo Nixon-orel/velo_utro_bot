@@ -5,31 +5,27 @@ module Bot
         event = get_event
         return unless event
         
-        unless event.author_id == @user.id
-          answer_callback_query(I18n.t('not_author'), show_alert: true)
-          return
+        gateway = Notifications::TelegramGateway.new(@bot)
+        result = Events::PublishEvent.call(
+          event: event,
+          actor: @user,
+          gateway: gateway,
+          channel_id: APP_CONFIG.public_channel_id,
+          payload: publication_payload(event)
+        )
+
+        if result.success?
+          notify_subscribers(event, gateway)
+          answer_callback_query(I18n.t('event_published'))
+        else
+          handle_publication_failure(result, event)
         end
-        
-        if event.published
-          answer_callback_query("Событие уже опубликовано", show_alert: true)
-          return
-        end
-        
-        publish_to_channel(event)
-        notify_subscribers(event)
-        event.update(published: true)
-        
-        answer_callback_query(I18n.t('event_published'))
       end
       
       private
       
-      def publish_to_channel(event)
-        channel_id = CONFIG['PUBLIC_CHANNEL_ID']
-        return unless channel_id
-        
+      def publication_payload(event)
         event_text = Bot::Helpers::Formatter.event_info(event)
-        
         buttons = [
           [
             create_button(
@@ -43,28 +39,15 @@ module Bot
           ]
         ]
         
-        markup = create_keyboard(buttons)
-        
-        response = @bot.api.send_message(
-          chat_id: channel_id,
+        {
           text: event_text,
           parse_mode: 'HTML',
-          reply_markup: markup
-        )
-        
-        if response && response.message_id
-          event.update(channel_message_id: response.message_id)
-        end
-      rescue => e
-        puts "Error publishing to channel: #{e.message}"
+          reply_markup: create_keyboard(buttons)
+        }
       end
       
-      def notify_subscribers(event)
-        subscribers = User.where(subscribed_to_notifications: true)
-        return if subscribers.empty?
-        
+      def notify_subscribers(event, gateway)
         event_text = Bot::Helpers::Formatter.event_info(event)
-        
         buttons = [
           [
             create_button(
@@ -78,24 +61,45 @@ module Bot
           ]
         ]
         
-        markup = create_keyboard(buttons)
-        
-        subscribers.each do |subscriber|
-          begin
-            @bot.api.send_message(
-              chat_id: subscriber.telegram_id,
-              text: "🔔 <b>Новое событие!</b>\n\n#{event_text}",
-              parse_mode: 'HTML',
-              reply_markup: markup
-            )
-          rescue => e
-            puts "Error notifying subscriber #{subscriber.telegram_id}: #{e.message}"
-          end
+        result = Notifications::PublishSubscribers.call(
+          event: event,
+          gateway: gateway,
+          payload: {
+            text: "🔔 <b>Новое событие!</b>\n\n#{event_text}",
+            parse_mode: 'HTML',
+            reply_markup: create_keyboard(buttons)
+          }
+        )
+
+        AppLogger.info(
+          'Bot::Callbacks::Publish',
+          'Subscriber delivery completed',
+          event_id: event.id,
+          sent_count: result.metadata[:sent_count],
+          failed_count: result.metadata.fetch(:failed_user_ids, []).count,
+          error_code: result.error_code
+        )
+      end
+
+      def handle_publication_failure(result, event)
+        if result.error_code == :forbidden
+          answer_callback_query(I18n.t('not_author'), show_alert: true)
+          return
         end
-        
-        puts "[Publish] Notified #{subscribers.count} subscribers about event #{event.id}"
-      rescue => e
-        puts "Error notifying subscribers: #{e.message}"
+
+        if result.error_code == :already_published
+          answer_callback_query('Событие уже опубликовано', show_alert: true)
+          return
+        end
+
+        AppLogger.error(
+          'Bot::Callbacks::Publish',
+          'Failed to publish event',
+          event_id: event.id,
+          error_code: result.error_code,
+          exception: result.error
+        )
+        answer_callback_query(I18n.t('publish_error'), show_alert: true)
       end
     end
   end

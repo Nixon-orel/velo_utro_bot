@@ -203,7 +203,7 @@ module Bot
       message_id ||= get_message_id(@message)
       return unless message_id
       
-      channel_id = CONFIG['PUBLIC_CHANNEL_ID']
+      channel_id = APP_CONFIG.public_channel_id
       if channel_id && @chat_id.to_s == channel_id.to_s
         update_channel_event_message(event, message_id)
         return

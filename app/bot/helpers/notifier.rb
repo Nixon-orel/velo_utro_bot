@@ -29,7 +29,7 @@ module Bot
       end
       
       def notify_channel_about_change(event, template_key, params = {})
-        channel_id = CONFIG['PUBLIC_CHANNEL_ID']
+        channel_id = APP_CONFIG.public_channel_id
         return unless channel_id
         return unless event.published
         
@@ -43,7 +43,13 @@ module Bot
       def build_event_vars(event, additional_params = {})
         vars = additional_params.dup
         channel_link = event.channel_link
-        puts "Event #{event.id}: channel_message_id=#{event.channel_message_id}, channel_link=#{channel_link}"
+        AppLogger.debug(
+          'Bot::Helpers::Notifier',
+          'Built event notification variables',
+          event_id: event.id,
+          channel_message_id: event.channel_message_id,
+          channel_link: channel_link
+        )
         
         vars[:event] = {
           event_type: event.event_type,
@@ -76,7 +82,12 @@ module Bot
             parse_mode: 'HTML'
           )
         rescue => e
-          puts "Failed to notify #{chat_id}: #{e.message}"
+          AppLogger.error(
+            'Bot::Helpers::Notifier',
+            'Failed to send notification',
+            chat_id: chat_id,
+            exception: e
+          )
         end
       end
     end
