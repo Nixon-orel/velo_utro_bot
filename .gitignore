@@ -13,6 +13,10 @@
 log/*
 *.log
 
+# Игнорировать локальный отчет покрытия тестами
+coverage/
+.rspec_status
+
 # Игнорировать временные файлы Ruby
 .bundle
 vendor/bundle

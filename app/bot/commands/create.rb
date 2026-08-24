@@ -7,6 +7,7 @@ module Bot
         @session.state = 'choose_date'
         @session.new_event = { 'author_id' => @user.id }
         @session.calendar_type = 'create'
+        @session['creation_claim'] = nil
         @session.save_session
         
         calendar = Bot::Helpers::Calendar.new

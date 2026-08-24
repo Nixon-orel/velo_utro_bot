@@ -10,7 +10,7 @@ module Bot
       @scheduler = nil
       @daily_job = nil
       @monthly_job = nil
-      @cron_expression = nil
+      @daily_cron_expression = nil
       @mutex = Mutex.new
       @lock_file = nil
 
@@ -46,7 +46,7 @@ module Bot
             @scheduler = nil
             @daily_job = nil
             @monthly_job = nil
-            @cron_expression = nil
+            @daily_cron_expression = nil
             @lock_file = nil
             [current_scheduler, current_lock_file]
           end
@@ -65,8 +65,9 @@ module Bot
               scheduler_running: @scheduler&.up? || false,
               daily_job_active: !@daily_job.nil?,
               monthly_job_active: !@monthly_job.nil?,
-              next_run: calculate_next_run(@cron_expression),
-              cron_expression: @cron_expression,
+              next_run: calculate_next_run(@daily_cron_expression),
+              cron_expression: @daily_cron_expression,
+              last_announcement_at: last_announcement_at,
               jobs_count: @scheduler&.jobs&.count || 0,
               lock_held: lock_held?
             }
@@ -79,6 +80,7 @@ module Bot
             monthly_job_active: false,
             next_run: nil,
             cron_expression: nil,
+            last_announcement_at: nil,
             jobs_count: 0,
             lock_held: false
           }
@@ -87,15 +89,21 @@ module Bot
         private
 
         def enabled?
-          APP_CONFIG.daily_announcement_enabled? || APP_CONFIG.monthly_stats_day
+          APP_CONFIG.daily_announcement_enabled? || !APP_CONFIG.monthly_stats_day.nil?
         end
 
         def schedule_daily_announcement(bot)
-          time = APP_CONFIG.daily_announcement_time
-          hour, minute = time.split(':').map(&:to_i)
-          @cron_expression = "#{minute} #{hour} * * * UTC"
-          @daily_job = @scheduler.schedule_cron(@cron_expression) { send_daily_announcement(bot) }
-          log(:info, 'Daily announcement scheduled', configured_time: time, cron_expression: @cron_expression)
+          hour, minute = APP_CONFIG.daily_announcement_time.split(':').map(&:to_i)
+          @daily_cron_expression = "#{minute} #{hour} * * * UTC"
+          @daily_job = @scheduler.schedule_cron(@daily_cron_expression) do
+            send_daily_announcement(bot)
+          end
+          log(
+            :info,
+            'Daily announcement scheduled',
+            configured_time: APP_CONFIG.daily_announcement_time,
+            cron_expression: @daily_cron_expression
+          )
         end
 
         def schedule_monthly_statistics(bot)
@@ -135,8 +143,12 @@ module Bot
           log(:error, 'Failed to release scheduler lock', exception: e)
         end
 
+        def lock_held?
+          !@lock_file.nil? && !@lock_file.closed?
+        end
+
         def send_daily_announcement(bot)
-          unless scheduler_lock_alive?
+          unless lock_held?
             log(:warn, 'Scheduler lock disappeared; announcement aborted')
             return false
           end
@@ -150,7 +162,7 @@ module Bot
           channel_id = APP_CONFIG.public_channel_id
           return false if channel_id.to_s.empty?
 
-          events = Event.next_24_hours.select(&:published?)
+          events = Event.next_24_hours(now: AppClock.now).select(&:published?)
           send_announcement_messages(bot, channel_id, events)
           File.write(LAST_ANNOUNCEMENT_PATH, current_time.to_i.to_s)
           log(:info, 'Daily announcement sent', events_count: events.count)
@@ -160,19 +172,21 @@ module Bot
           false
         end
 
-        def scheduler_lock_alive?
-          lock_held?
-        end
-
-        def lock_held?
-          @lock_file && !@lock_file.closed?
-        end
-
         def recent_announcement?(current_time)
           return false unless File.exist?(LAST_ANNOUNCEMENT_PATH)
 
           last_time = File.read(LAST_ANNOUNCEMENT_PATH).to_i
           current_time.to_i - last_time < 20.hours
+        end
+
+        def last_announcement_at
+          return unless File.exist?(LAST_ANNOUNCEMENT_PATH)
+
+          timestamp = Integer(File.read(LAST_ANNOUNCEMENT_PATH).strip, 10)
+          Time.at(timestamp).utc if timestamp.positive?
+        rescue ArgumentError, SystemCallError => e
+          log(:warn, 'Failed to read last announcement time', exception: e)
+          nil
         end
 
         def send_announcement_messages(bot, channel_id, events)

@@ -2,10 +2,13 @@ module Bot
   module Commands
     class SchedulerStatus < Bot::CommandHandler
       def execute
-        ensure_private_chat
+        return unless ensure_private_chat
         
         user = User.find_or_create_from_telegram(@message.from)
-        return unless user.admin?
+        unless user.admin?
+          send_message(I18n.t('admin_only'))
+          return
+        end
         
         status_info = []
         status_info << "🤖 Статус планировщика:"
@@ -18,18 +21,11 @@ module Bot
           status_info << "📅 Планировщик: Запущен"
           status_info << "🔧 Состояние: Активен"
           status_info << "📊 Количество задач: #{status[:jobs_count]}"
-          
-          if status[:daily_job_active]
-            status_info << "⏰ Задача анонсов: Активна"
-            if status[:next_run]
-              status_info << "🕐 Следующий запуск: #{status[:next_run]}"
-            else
-              status_info << "🕐 Следующий запуск: Не определен"
-            end
-            status_info << "📝 Cron выражение: #{status[:cron_expression] || 'Неизвестно'}"
-          else
-            status_info << "⏰ Задача анонсов: Не найдена или неактивна"
-          end
+          daily_state = status[:daily_job_active] ? 'Активна' : 'Неактивна'
+          status_info << "🔔 Ежедневные анонсы: #{daily_state}"
+          status_info << "🕐 Следующий анонс (UTC): #{status[:next_run]}" if status[:next_run]
+          monthly_state = status[:monthly_job_active] ? 'Активна' : 'Неактивна'
+          status_info << "📈 Задача месячной статистики: #{monthly_state}"
         else
           status_info << "📅 Планировщик: Не запущен"
         end
@@ -38,21 +34,21 @@ module Bot
         
         status_info << ""
         status_info << "⚙️ Настройки:"
-        status_info << "🔔 Анонсы включены: #{APP_CONFIG.daily_announcement_enabled?}"
-        status_info << "🕐 Время анонсов: #{APP_CONFIG.daily_announcement_time}"
+        status_info << "🔔 Ежедневные анонсы: #{APP_CONFIG.daily_announcement_enabled? ? 'Включены' : 'Выключены'}"
+        status_info << "🕐 Время анонсов (UTC): #{APP_CONFIG.daily_announcement_time}"
+        last_announcement = status[:last_announcement_at]
+        last_announcement_text = if last_announcement
+          last_announcement.in_time_zone(APP_CONFIG.timezone).strftime('%d.%m.%Y %H:%M:%S')
+        else
+          'Не отправлялся'
+        end
+        status_info << "📢 Последний анонс: #{last_announcement_text}"
+        status_info << "📆 День месячной статистики: #{APP_CONFIG.monthly_stats_day || 'Не задан'}"
         status_info << "🌍 Часовой пояс: #{APP_CONFIG.timezone}"
         status_info << ""
         status_info << "🆔 Процесс:"
         status_info << "🔢 PID: #{Process.pid}"
         status_info << "⏱️ Время запуска: #{APP_STARTED_AT.strftime('%d.%m.%Y %H:%M:%S')}"
-        
-        last_announcement_file = '/tmp/velo_utro_bot_last_announcement'
-        if File.exist?(last_announcement_file)
-          last_time = Time.at(File.read(last_announcement_file).to_i).in_time_zone(APP_CONFIG.timezone)
-          status_info << "📢 Последний анонс: #{last_time.strftime('%d.%m.%Y %H:%M:%S')}"
-        else
-          status_info << "📢 Последний анонс: Не найден"
-        end
         
         send_message(status_info.join("\n"))
       end

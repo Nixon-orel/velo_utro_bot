@@ -14,7 +14,7 @@ development:
 
 test:
   <<: *default
-  database: sport_event_bot_test
+  database: <%= ENV['DB_NAME'] || 'velo_utro_bot_test' %>
   username: <%= ENV['DB_USER'] || 'postgres' %>
   password: <%= ENV['DB_PASSWORD'] || 'postgres' %>
   host: <%= ENV['DB_HOST'] || 'localhost' %>

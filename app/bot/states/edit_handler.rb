@@ -37,7 +37,7 @@ module Bot
       end
       
       def should_notify?(new_value, old_value)
-        new_value && new_value != old_value
+        new_value != old_value
       end
       
       def should_reschedule_weather?(field, event)

@@ -2,7 +2,7 @@ module Bot
   module Callbacks
     class EditTrack < Bot::CallbackHandler
       def process
-        event = get_authorized_event
+        event = get_authorized_route_event
         return unless event
 
         prepare_event_edit(event, 'edit_track')

@@ -43,7 +43,7 @@ class WeatherRecommendations
       recommendations << "🧣 Бафф на шею"
     when 15...25
       recommendations << "👕 Идеальная погода! Легкая одежда"
-    when 25..
+    when 25..Float::INFINITY
       recommendations << "💧 Возьмите больше воды"
       recommendations << "☀️ Солнцезащитный крем"
     end
@@ -92,7 +92,10 @@ class WeatherRecommendations
     return recommendations unless event_time && sunset
     
     begin
-      event_hour, event_minute = event_time.to_s.split(':').first(2).map(&:to_i)
+      start_time = event_time.to_s.strip.split(/\s*-\s*/, 2).first
+      return recommendations unless start_time.match?(/\A(?:[01]?\d|2[0-3]):[0-5]\d\z/)
+
+      event_hour, event_minute = start_time.split(':').map(&:to_i)
       sunset_time = Time.strptime(sunset, '%I:%M %p')
       event_minutes = event_hour * 60 + event_minute
       sunset_minutes = sunset_time.hour * 60 + sunset_time.min

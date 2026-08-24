@@ -1,0 +1,7 @@
+require_relative 'spec_helper'
+require_relative 'support/database'
+require_relative 'support/records'
+require_relative 'support/telegram_gateway'
+require_relative 'support/telegram_updates'
+require_relative 'support/app_config'
+require_relative 'support/concurrency'

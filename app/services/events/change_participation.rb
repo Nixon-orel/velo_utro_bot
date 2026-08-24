@@ -4,7 +4,7 @@ module Events
       return ServiceResult.failure(:invalid_actor, value: event) unless actor
 
       changed = false
-      Event.transaction do
+      event.with_lock do
         participating = event.participants.exists?(actor.id)
 
         if join && !participating

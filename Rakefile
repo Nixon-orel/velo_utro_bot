@@ -2,6 +2,7 @@ require 'sinatra/activerecord/rake'
 require_relative 'config/environment'
 
 ActiveRecord::Tasks::DatabaseTasks.migrations_paths = [File.join(VELO_UTRO_ROOT, 'db', 'migrations')]
+ActiveRecord::Migrator.migrations_paths = ActiveRecord::Tasks::DatabaseTasks.migrations_paths
 
 namespace :db do
   task :load_config do

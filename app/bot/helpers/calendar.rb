@@ -45,9 +45,9 @@ module Bot
           return nil
         when 'day'
           date_str = parts[2]
-          date = Date.parse(date_str)
+          date = Date.iso8601(date_str)
           
-          if @options[:lock_date] && !@lock_date_array.empty? && @lock_date_array.include?(date_str)
+          if unavailable_date?(date, date_str)
             bot.api.answer_callback_query(
               callback_query_id: callback.id,
               text: I18n.t('calendar.date_locked'),
@@ -80,9 +80,23 @@ module Bot
           
           return nil
         end
+      rescue Date::Error, ArgumentError
+        bot.api.answer_callback_query(
+          callback_query_id: callback.id,
+          text: I18n.t('invalid_input'),
+          show_alert: true
+        )
+        nil
       end
       
       private
+
+      def unavailable_date?(date, date_str)
+        outside_range = date < @options[:start_date].to_date || date > @options[:stop_date].to_date
+        in_past = date < AppClock.today
+        explicitly_locked = @options[:lock_date] && @lock_date_array.include?(date_str)
+        outside_range || in_past || explicitly_locked
+      end
       
       def create_calendar(date)
         year = date.year
@@ -160,11 +174,10 @@ module Bot
         while day <= last_day.day
           date = Date.new(year, month, day)
           date_str = date.strftime('%Y-%m-%d')
-          is_locked = @options[:lock_date] && !@lock_date_array.empty? && @lock_date_array.include?(date_str)
-          is_past = date < AppClock.today
+          is_unavailable = unavailable_date?(date, date_str)
           
-          button_text = is_past ? ' ' : day.to_s
-          button_data = (is_locked || is_past) ? 'calendar_ignore' : "calendar_day_#{date_str}"
+          button_text = is_unavailable ? ' ' : day.to_s
+          button_data = is_unavailable ? 'calendar_ignore' : "calendar_day_#{date_str}"
           
           row << Telegram::Bot::Types::InlineKeyboardButton.new(
             text: button_text,

@@ -8,6 +8,14 @@ module Bot
     end
     
     def self.process(state, bot, message, session)
+      unless message.text
+        bot.api.send_message(
+          chat_id: message.chat.id,
+          text: I18n.t('invalid_input')
+        )
+        return
+      end
+
       state_class = state.split('_').map(&:capitalize).join('')
       
       if const_defined?(state_class)

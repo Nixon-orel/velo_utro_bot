@@ -12,7 +12,7 @@ module Bot
       end
       
       def self.format_time(time)
-        time.to_s[0..4]
+        time.to_s.strip.split(/\s*-\s*/, 2).first[0..4].strip
       end
       
       def self.event_info(event)

@@ -120,33 +120,47 @@ module Bot
     def edit_event_date(callback, session, date)
       event = Event.find_by(id: session.edit_event_id)
       user = User.find_or_create_from_telegram(callback.from)
-      return unless event
-
-      result = Events::EditEvent.call(event: event, actor: user, changes: { date: Date.parse(date) })
-      return unless result.success?
-
-      new_date = event.formatted_date
-
-      notifier = Bot::Helpers::Notifier.new(@bot)
-      notifier.notify_participants(event, 'date_changed_notification', { new_date: new_date })
-      notifier.notify_channel_about_change(event, 'date_changed_channel_notification', { new_date: new_date })
-
-      if event.weather_data.present? && APP_CONFIG.weather_enabled?
-        Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
-        AppLogger.info('Bot::UpdateRouter', 'Rescheduled weather updates', event_id: event.id)
+      unless event
+        reset_edit_session(session)
+        send_html(callback.message.chat.id, I18n.t('invalid_input'))
+        return
       end
 
-      session.state = nil
-      session.edit_event_id = nil
-      session.save_session
+      result = Events::EditEvent.call(event: event, actor: user, changes: { date: Date.parse(date) })
+      if result.failure?
+        message_key = result.error_code == :forbidden ? 'not_author' : 'invalid_input'
+        send_html(callback.message.chat.id, I18n.t(message_key))
+        return
+      end
+
+      if result.metadata[:changed_fields].include?(:date)
+        new_date = event.formatted_date
+        notifier = Bot::Helpers::Notifier.new(@bot)
+        notifier.notify_participants(event, 'date_changed_notification', { new_date: new_date })
+        notifier.notify_channel_about_change(event, 'date_changed_channel_notification', { new_date: new_date })
+
+        if event.weather_data.present? && APP_CONFIG.weather_enabled?
+          Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
+          AppLogger.info('Bot::UpdateRouter', 'Rescheduled weather updates', event_id: event.id)
+        end
+      end
+
+      reset_edit_session(session)
 
       send_html(callback.message.chat.id, I18n.t('date_saved'))
       send_html(callback.message.chat.id, I18n.t('event_updated'))
     end
 
+    def reset_edit_session(session)
+      session.state = nil
+      session.edit_event_id = nil
+      session.save_session
+    end
+
     def display_events_for_date(callback, session, selected_date)
       date = Date.parse(selected_date)
-      events = Event.on_date(date)
+      now = AppClock.now
+      events = Event.upcoming_on_date(date, now: now)
       handler = Bot::CallbackHandler.new(@bot, callback, session)
       handler.send(
         :display_events,

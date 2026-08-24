@@ -42,6 +42,15 @@ module Bot
       nil
     end
 
+    def get_authorized_route_event
+      event = get_authorized_event
+      return unless event
+      return event unless event.static?
+
+      answer_callback_query(I18n.t('invalid_input'), show_alert: true)
+      nil
+    end
+
     def prepare_event_edit(event, state, calendar_type: nil)
       @session.edit_event_id = event.id
       @session.state = state

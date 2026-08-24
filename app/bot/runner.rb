@@ -56,8 +56,7 @@ module Bot
     def configure_telegram
       configure_commands(GROUP_COMMANDS, 'all_group_chats', 'Group commands set (redirect to private)')
       configure_commands(PRIVATE_COMMANDS, 'all_private_chats', 'Private commands set (full functionality)')
-      configure_menu_button('all_group_chats', 'Group menu button enabled')
-      configure_menu_button('all_private_chats', 'Private menu button enabled')
+      configure_menu_button
     end
 
     def configure_commands(commands, scope_type, success_message)
@@ -67,14 +66,13 @@ module Bot
       AppLogger.error('Bot::Runner', 'Failed to set commands', scope: scope_type, exception: e)
     end
 
-    def configure_menu_button(scope_type, success_message)
+    def configure_menu_button
       @bot.api.set_chat_menu_button(
-        menu_button: { type: 'commands' },
-        scope: { type: scope_type }
+        menu_button: { type: 'commands' }
       )
-      AppLogger.info('Bot::Runner', success_message, scope: scope_type)
+      AppLogger.info('Bot::Runner', 'Default private-chat menu button enabled')
     rescue => e
-      AppLogger.error('Bot::Runner', 'Failed to enable menu button', scope: scope_type, exception: e)
+      AppLogger.error('Bot::Runner', 'Failed to enable menu button', exception: e)
     end
 
     def start_schedulers

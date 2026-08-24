@@ -23,7 +23,8 @@ module Events
       previous_values = normalized_changes.keys.to_h { |field| [field, event.public_send(field)] }
       Event.transaction { event.update!(normalized_changes) }
 
-      ServiceResult.success(event, previous_values: previous_values, changed_fields: event.previous_changes.keys.map(&:to_sym))
+      changed_fields = event.previous_changes.keys.map(&:to_sym) & EDITABLE_FIELDS
+      ServiceResult.success(event, previous_values: previous_values, changed_fields: changed_fields)
     rescue ActiveRecord::RecordInvalid => e
       ServiceResult.failure(:validation_failed, error: e, value: event)
     rescue ActiveRecord::ActiveRecordError => e

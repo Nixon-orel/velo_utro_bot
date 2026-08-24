@@ -37,8 +37,15 @@ module Bot
       def fetch_weather_and_save(coordinates, city_name)
         require_relative '../../services/event_weather_service'
         
-        result = EventWeatherService.create_event_with_weather(@session, coordinates, city_name)
+        result = EventWeatherService.create_event_with_weather(
+          @session,
+          coordinates,
+          city_name,
+          expected_state: 'enter_weather_longitude'
+        )
         unless result.success?
+          return if %i[already_processed already_processing claim_lost].include?(result.error_code)
+
           AppLogger.error(
             'Bot::States::EnterWeatherLongitude',
             'Failed to create event',
@@ -50,7 +57,6 @@ module Bot
         end
 
         event = result.value
-        transition_to_state(nil)
         
         buttons = [
           [
@@ -72,6 +78,11 @@ module Bot
       end
       
       def update_existing_event_weather(event, latitude, longitude)
+        unless Events::Policy.manage?(event: event, actor: @user)
+          send_message(I18n.t('not_author'))
+          return
+        end
+
         require_relative '../../services/weather_service'
         
         coordinates = "#{latitude},#{longitude}"

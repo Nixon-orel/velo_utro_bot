@@ -1,5 +1,10 @@
 require 'dotenv/load'
 require 'telegram/bot'
+
+# telegram-bot-ruby 2.4 has a circular autoload between CallbackQuery and
+# MaybeInaccessibleMessage. Loading Message first makes both update types safe.
+Telegram::Bot::Types::Message
+
 require 'sinatra/base'
 require 'sinatra/activerecord'
 require 'json'

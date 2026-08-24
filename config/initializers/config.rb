@@ -1,6 +1,8 @@
 require 'yaml'
 require 'active_support/time'
 
+ActiveSupport.to_time_preserves_timezone = :zone
+
 ENV['RACK_ENV'] ||= 'development'
 
 require_relative '../app_config'

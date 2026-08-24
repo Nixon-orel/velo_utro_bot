@@ -12,12 +12,15 @@ module Bot
           default_city = APP_CONFIG.default_weather_city
           
           require_relative '../../services/event_weather_service'
-          result = EventWeatherService.create_event_with_weather(@session, default_coordinates, default_city)
+          result = EventWeatherService.create_event_with_weather(
+            @session,
+            default_coordinates,
+            default_city,
+            expected_state: 'enter_additional_info'
+          )
           return handle_creation_failure(result) if result.failure?
 
           event = result.value
-          
-          transition_to_state(nil)
           
           buttons = [
             [
@@ -44,11 +47,13 @@ module Bot
             send_message(I18n.t('event_created_weather_failed'), { reply_markup: markup })
           end
         else
-          result = Events::CreateEvent.from_session(session: @session)
+          result = Events::CreateEvent.from_session(
+            session: @session,
+            expected_state: 'enter_additional_info'
+          )
           return handle_creation_failure(result) if result.failure?
 
           event = result.value
-          transition_to_state(nil)
           
           buttons = [
             [
@@ -67,6 +72,8 @@ module Bot
       private
       
       def handle_creation_failure(result)
+        return if %i[already_processed already_processing claim_lost].include?(result.error_code)
+
         AppLogger.error(
           'Bot::States::EnterAdditionalInfo',
           'Failed to create event',

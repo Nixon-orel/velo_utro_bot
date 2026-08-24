@@ -8,7 +8,7 @@ class EventTime
 
   def self.parse(date:, time:, timezone: APP_CONFIG.timezone)
     date = Date.parse(date.to_s) unless date.is_a?(Date)
-    start_time = time.to_s.split(/\s*-\s*/, 2).first
+    start_time = time.to_s.strip.split(/\s*-\s*/, 2).first
     return nil unless start_time.match?(LEGACY_START_FORMAT)
 
     hour, minute = start_time.split(':').map(&:to_i)

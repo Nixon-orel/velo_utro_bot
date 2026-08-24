@@ -1,7 +1,10 @@
 require 'active_support/time'
 
 class Event < ActiveRecord::Base
+  WEATHER_SCHEDULE_ATTRIBUTES = %w[date time latitude longitude published].freeze
+
   belongs_to :author, class_name: 'User', foreign_key: 'author_id'
+  has_many :notification_deliveries, dependent: :delete_all
   has_and_belongs_to_many :participants, 
                           class_name: 'User', 
                           join_table: 'participants',
@@ -10,6 +13,7 @@ class Event < ActiveRecord::Base
   
   validates :date, :time, :event_type, :location, :author_id, presence: true
   validate :supported_time_format
+  before_update :advance_weather_schedule_revision, if: :weather_schedule_changed?
   
   def formatted_time
     time
@@ -42,14 +46,32 @@ class Event < ActiveRecord::Base
     from_date_through(start_date, end_date)
   end
   
-  def self.upcoming
-    where('date >= ?', AppClock.today)
-      .order(:date, :time)
-      .select { |event| event.starts_at && event.starts_at >= AppClock.now }
+  def self.upcoming(now: AppClock.now)
+    select_upcoming(where('date >= ?', now.to_date).order(:date, :time), now: now)
   end
-  
-  def self.today
-    on_date(AppClock.today)
+
+  def self.upcoming_for_author(user, now: AppClock.now)
+    events = user.authored_events.where('date >= ?', now.to_date).order(:date, :time)
+    select_upcoming(events, now: now)
+  end
+
+  def self.upcoming_for_participant(user, now: AppClock.now)
+    events = user.events_as_participant.where('date >= ?', now.to_date).order(:date, :time)
+    select_upcoming(events, now: now)
+  end
+
+  def self.upcoming_on_date(date, now: AppClock.now)
+    select_upcoming(on_date(date), now: now)
+  end
+
+  def self.upcoming_from_date_through(start_date, end_date, now: AppClock.now)
+    select_upcoming(from_date_through(start_date, end_date), now: now)
+  end
+
+  def self.next_24_hours(now: AppClock.now)
+    ends_at = now + 24.hours
+    select_upcoming(from_date_through(now.to_date, ends_at.to_date), now: now)
+      .take_while { |event| event.starts_at <= ends_at }
   end
   
   def self.tomorrow
@@ -60,21 +82,6 @@ class Event < ActiveRecord::Base
     from_date_through(AppClock.today, AppClock.today + 6.days)
   end
   
-  def self.next_24_hours
-    now_local = AppClock.now
-    end_time_local = now_local + 24.hours
-    
-    AppLogger.debug('Event', 'Looking for events in next 24 hours', from: now_local, to: end_time_local)
-    
-    candidates = from_date_through(now_local.to_date, end_time_local.to_date)
-    events = candidates.select do |event|
-      event.starts_at && event.starts_at >= now_local && event.starts_at <= end_time_local
-    end
-    
-    AppLogger.debug('Event', 'Selected events in next 24 hours', events_count: events.count)
-    events.sort_by { |event| [event.date, event.time] }
-  end
-
   def starts_at
     EventTime.parse(date: date, time: time)
   end
@@ -153,10 +160,26 @@ class Event < ActiveRecord::Base
 
   private
 
+  def self.select_upcoming(events, now:)
+    events.filter_map do |event|
+      starts_at = event.starts_at
+      [starts_at, event] if starts_at && starts_at >= now
+    end.sort_by(&:first).map(&:last)
+  end
+  private_class_method :select_upcoming
+
   def supported_time_format
     return if EventTime.valid_input?(time)
     return if persisted? && !will_save_change_to_time? && EventTime.parse(date: date, time: time)
 
     errors.add(:time, :invalid)
+  end
+
+  def weather_schedule_changed?
+    WEATHER_SCHEDULE_ATTRIBUTES.any? { |attribute| will_save_change_to_attribute?(attribute) }
+  end
+
+  def advance_weather_schedule_revision
+    self.weather_schedule_revision = weather_schedule_revision.to_i + 1
   end
 end

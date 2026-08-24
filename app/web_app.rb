@@ -20,15 +20,4 @@ class App < Sinatra::Base
     HTML
   end
 
-  get '/publish-today-events' do
-    events = Event.today
-
-    if events.empty?
-      'No events scheduled for today.'
-    else
-      "#{events.length} events published successfully."
-    end
-  rescue => e
-    "An error occurred while publishing events: #{e.message}"
-  end
 end

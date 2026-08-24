@@ -15,6 +15,7 @@ module Bot
         )
 
         if result.success?
+          schedule_weather_updates(event)
           notify_subscribers(event, gateway)
           answer_callback_query(I18n.t('event_published'))
         else
@@ -23,6 +24,19 @@ module Bot
       end
       
       private
+
+      def schedule_weather_updates(event)
+        return unless event.weather_data.present? && APP_CONFIG.weather_enabled?
+
+        Bot::Helpers::WeatherScheduler.schedule_weather_updates(event, bot: @bot)
+      rescue => e
+        AppLogger.error(
+          'Bot::Callbacks::Publish',
+          'Failed to schedule weather updates after publication',
+          event_id: event.id,
+          exception: e
+        )
+      end
       
       def publication_payload(event)
         event_text = Bot::Helpers::Formatter.event_info(event)

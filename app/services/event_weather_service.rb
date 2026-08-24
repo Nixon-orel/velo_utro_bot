@@ -1,19 +1,23 @@
 class EventWeatherService
-  def self.create_event_with_weather(session, coordinates, city_name)
+  def self.create_event_with_weather(session, coordinates, city_name, expected_state: nil)
     require_relative 'weather_service'
     require_relative 'weather_recommendations'
     
     event_date = Date.parse(session.new_event['date'])
     event_time = session.new_event['time']
-    
-    weather_data = fetch_weather(coordinates, event_date, event_time)
-    weather_attributes = build_weather_attributes(weather_data, coordinates, city_name)
-    result = Events::CreateEvent.from_session(session: session, extra_attributes: weather_attributes)
+
+    weather_data = nil
+    result = Events::CreateEvent.from_session(
+      session: session,
+      expected_state: expected_state
+    ) do
+      weather_data = fetch_weather(coordinates, event_date, event_time)
+      build_weather_attributes(weather_data, coordinates, city_name)
+    end
     return result if result.failure?
 
     event = result.value
     weather_info = build_weather_info(weather_data, event_time, city_name)
-    schedule_error = schedule_weather_updates(event) if weather_data
 
     if weather_data
       AppLogger.info('EventWeatherService', 'Event created with weather data', event_id: event.id)
@@ -24,14 +28,37 @@ class EventWeatherService
     ServiceResult.success(
       event,
       weather_available: !weather_data.nil?,
-      weather_info: weather_info,
-      schedule_error: schedule_error
+      weather_info: weather_info
     )
   rescue Date::Error, TypeError => e
     ServiceResult.failure(:invalid_date, error: e)
   rescue => e
     AppLogger.error('EventWeatherService', 'Failed before event persistence', exception: e)
     ServiceResult.failure(:weather_preparation_failed, error: e)
+  end
+
+  def self.update_event_weather(event:, actor:, coordinates:, city_name:)
+    return ServiceResult.failure(:forbidden) unless Events::Policy.manage?(event: event, actor: actor)
+
+    weather_data = fetch_weather(coordinates, event.date, event.time)
+    lat, lon = coordinates.split(',')
+    result = Events::EditEvent.call(
+      event: event,
+      actor: actor,
+      changes: {
+        weather_city: city_name,
+        latitude: lat.to_f,
+        longitude: lon.to_f,
+        weather_data: weather_data || {},
+        weather_updated_at: weather_data ? AppClock.now : nil
+      }
+    )
+    return result if result.failure?
+
+    ServiceResult.success(event, weather_available: !weather_data.nil?)
+  rescue => e
+    AppLogger.error('EventWeatherService', 'Failed to update event weather', event_id: event.id, exception: e)
+    ServiceResult.failure(:weather_update_failed, error: e)
   end
   
   private
@@ -44,16 +71,18 @@ class EventWeatherService
   end
   
   def self.build_weather_attributes(weather_data, coordinates, city_name)
-    return {} unless weather_data
-
     lat, lon = coordinates.split(',')
-    {
+    attributes = {
       weather_city: city_name,
       latitude: lat.to_f,
-      longitude: lon.to_f,
+      longitude: lon.to_f
+    }
+    return attributes unless weather_data
+
+    attributes.merge(
       weather_data: weather_data,
       weather_updated_at: AppClock.now
-    }
+    )
   end
 
   def self.build_weather_info(weather_data, event_time, city_name)
@@ -97,12 +126,4 @@ class EventWeatherService
     weather_text
   end
   
-  def self.schedule_weather_updates(event)
-    require_relative '../bot/helpers/weather_scheduler'
-    Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)
-    nil
-  rescue => e
-    AppLogger.error('EventWeatherService', 'Failed to schedule weather updates', event_id: event.id, exception: e)
-    e
-  end
 end

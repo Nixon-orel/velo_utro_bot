@@ -4,9 +4,8 @@ module Bot
       def process
         return unless ensure_private_chat
 
-        events = @user.authored_events
-                      .where('date >= ?', AppClock.today)
-                      .order(date: :asc, time: :asc)
+        answer_callback_query
+        events = Event.upcoming_for_author(@user)
 
         delete_message
         return send_message(I18n.t('no_events')) if events.empty?

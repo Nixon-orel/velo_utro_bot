@@ -56,20 +56,14 @@ module Bot
       private
       
       def update_event_weather(event, coordinates, city_name)
-        require_relative '../../services/weather_service'
-        
-        lat, lon = coordinates.split(',')
-        weather_data = WeatherService.fetch_weather_for_event(coordinates, event.date, event.time)
-        
-        changes = {
-          weather_city: city_name,
-          latitude: lat.to_f,
-          longitude: lon.to_f,
-          weather_data: weather_data || {},
-          weather_updated_at: weather_data ? AppClock.now : nil
-        }
+        require_relative '../../services/event_weather_service'
 
-        Events::EditEvent.call(event: event, actor: @user, changes: changes)
+        EventWeatherService.update_event_weather(
+          event: event,
+          actor: @user,
+          coordinates: coordinates,
+          city_name: city_name
+        )
       end
       
       def transition_to_state(state)
