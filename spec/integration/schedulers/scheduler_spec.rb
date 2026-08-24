@@ -11,7 +11,6 @@ RSpec.describe Bot::Helpers::Scheduler do
 
   before do
     stub_const("#{described_class}::LOCK_FILE_PATH", File.join(@temp_directory, 'scheduler.lock'))
-    stub_const("#{described_class}::LAST_ANNOUNCEMENT_PATH", File.join(@temp_directory, 'last-announcement'))
     stub_const("#{described_class}::LAST_MONTHLY_STATS_PATH", File.join(@temp_directory, 'last-monthly'))
   end
 
@@ -36,12 +35,13 @@ RSpec.describe Bot::Helpers::Scheduler do
       scheduler_running: true,
       daily_job_active: true,
       monthly_job_active: true,
+      announcement_outbox_job_active: true,
       cron_expression: '30 18 * * * UTC',
-      jobs_count: 2,
+      jobs_count: 3,
       lock_held: true
     )
     expect(first_status[:next_run]).not_to be_nil
-    expect(second_status[:jobs_count]).to eq(2)
+    expect(second_status[:jobs_count]).to eq(3)
   end
 
   it 'starts with only the daily announcement configured' do
@@ -57,8 +57,9 @@ RSpec.describe Bot::Helpers::Scheduler do
       scheduler_running: true,
       daily_job_active: true,
       monthly_job_active: false,
+      announcement_outbox_job_active: true,
       cron_expression: '30 7 * * * UTC',
-      jobs_count: 1,
+      jobs_count: 2,
       lock_held: true
     )
   end
@@ -167,8 +168,50 @@ RSpec.describe Bot::Helpers::Scheduler do
     expect(api.sent_messages.map { |message| message[:text] }).to eq(
       [I18n.t('daily_announcement_header'), Bot::Helpers::Formatter.event_info(published)]
     )
-    expect(File.read(described_class::LAST_ANNOUNCEMENT_PATH)).to eq(AppClock.utc_now.to_i.to_s)
+    expect(NotificationDelivery.where(notification_type: 'announcement.daily')).to all(
+      have_attributes(status: 'delivered', finalized_at: AppClock.now)
+    )
     expect(described_class.status[:last_announcement_at]).to eq(AppClock.utc_now)
+  end
+
+  it 'retries only the undelivered part of a daily announcement' do
+    use_app_config(
+      'DAILY_ANNOUNCEMENT_ENABLED' => true,
+      'DAILY_ANNOUNCEMENT_TIME' => '18:30',
+      'MONTHLY_STATS_DAY' => nil,
+      'PUBLIC_CHANNEL_ID' => '@veloutro'
+    )
+    AppClock.source = -> { Time.utc(2026, 8, 23, 9, 0) }
+    author = create_user(telegram_id: 302, username: 'Организатор')
+    event = create_event(
+      author: author,
+      date: Date.new(2026, 8, 24),
+      time: '09:00',
+      published: true
+    )
+    bot, api = recording_bot
+    send_attempt = 0
+    allow(api).to receive(:send_message).and_wrap_original do |original, *args, **kwargs|
+      send_attempt += 1
+      raise Faraday::TimeoutError, 'timeout' if send_attempt == 2
+
+      original.call(*args, **kwargs)
+    end
+    described_class.start(bot)
+
+    expect(described_class.send(:send_daily_announcement, bot)).to be(false)
+    AppClock.source = -> { Time.utc(2026, 8, 23, 9, 0, 30) }
+    expect(described_class.send(:send_daily_announcement, bot)).to be(true)
+
+    expect(api.sent_messages.map { |message| message[:text] }).to eq(
+      [I18n.t('daily_announcement_header'), Bot::Helpers::Formatter.event_info(event)]
+    )
+    deliveries = NotificationDelivery.where(notification_type: 'announcement.daily').order(:id)
+    expect(deliveries).to all(
+      have_attributes(status: 'delivered', finalized_at: AppClock.now, event_id: nil)
+    )
+    expect(deliveries.pluck(:attempts)).to eq([1, 2])
+    expect(described_class.status[:last_announcement_at]).to eq(AppClock.now)
   end
 
   it 'announces that no events are scheduled in the next 24 hours' do
@@ -190,7 +233,29 @@ RSpec.describe Bot::Helpers::Scheduler do
     )
   end
 
-  it 'does not record a daily announcement when Telegram delivery fails' do
+  it 'creates a new announcement batch after twenty hours on the same UTC date' do
+    use_app_config(
+      'DAILY_ANNOUNCEMENT_ENABLED' => true,
+      'MONTHLY_STATS_DAY' => nil,
+      'PUBLIC_CHANNEL_ID' => '@veloutro'
+    )
+    AppClock.source = -> { Time.utc(2026, 8, 23, 0, 0) }
+    bot, api = recording_bot
+    described_class.start(bot)
+
+    expect(described_class.send(:send_daily_announcement, bot)).to be(true)
+    AppClock.source = -> { Time.utc(2026, 8, 23, 20, 0) }
+    expect(described_class.send(:send_daily_announcement, bot)).to be(true)
+
+    expect(api.sent_messages.map { |message| message[:text] }).to eq(
+      [I18n.t('daily_announcement_no_events'), I18n.t('daily_announcement_no_events')]
+    )
+    deliveries = NotificationDelivery.where(notification_type: 'announcement.daily')
+    expect(deliveries.count).to eq(2)
+    expect(deliveries.distinct.count(:context_key)).to eq(2)
+  end
+
+  it 'queues a failed daily announcement without recording it as completed' do
     use_app_config(
       'DAILY_ANNOUNCEMENT_ENABLED' => true,
       'MONTHLY_STATS_DAY' => nil,
@@ -200,7 +265,101 @@ RSpec.describe Bot::Helpers::Scheduler do
     described_class.start(bot)
 
     expect(described_class.send(:send_daily_announcement, bot)).to be(false)
-    expect(File).not_to exist(described_class::LAST_ANNOUNCEMENT_PATH)
+    expect(described_class.status[:last_announcement_at]).to be_nil
+    expect(NotificationDelivery.where(notification_type: 'announcement.daily')).to contain_exactly(
+      have_attributes(status: 'pending', attempts: 1, finalized_at: nil)
+    )
+  end
+
+  it 'restores an unfinished daily announcement after restart when new announcements are disabled' do
+    use_app_config(
+      'DAILY_ANNOUNCEMENT_ENABLED' => true,
+      'MONTHLY_STATS_DAY' => nil,
+      'PUBLIC_CHANNEL_ID' => '@veloutro'
+    )
+    AppClock.source = -> { Time.utc(2026, 8, 23, 9, 0) }
+    event = create_event(
+      author: create_user(telegram_id: 303, username: 'Организатор'),
+      date: Date.new(2026, 8, 24),
+      time: '09:00',
+      published: true
+    )
+    failing_bot, failing_api = recording_bot
+    send_attempt = 0
+    allow(failing_api).to receive(:send_message).and_wrap_original do |original, *args, **kwargs|
+      send_attempt += 1
+      raise Faraday::TimeoutError, 'timeout' if send_attempt == 2
+
+      original.call(*args, **kwargs)
+    end
+    described_class.start(failing_bot)
+    expect(described_class.send(:send_daily_announcement, failing_bot)).to be(false)
+    described_class.stop
+
+    use_app_config('DAILY_ANNOUNCEMENT_ENABLED' => false, 'MONTHLY_STATS_DAY' => nil)
+    AppClock.source = -> { Time.utc(2026, 8, 23, 9, 0, 30) }
+    recovered_bot, recovered_api = recording_bot
+
+    expect(described_class.start(recovered_bot)).to be(true)
+    expect(recovered_api.sent_messages.map { |message| message[:text] }).to eq(
+      [Bot::Helpers::Formatter.event_info(event)]
+    )
+    expect(NotificationDelivery.where(notification_type: 'announcement.daily')).to all(
+      have_attributes(status: 'delivered', finalized_at: AppClock.now)
+    )
+    expect(described_class.status).to include(
+      daily_job_active: false,
+      announcement_outbox_job_active: true,
+      last_announcement_at: AppClock.now
+    )
+  end
+
+  it 'continues a daily announcement after one message exhausts its retries' do
+    use_app_config(
+      'DAILY_ANNOUNCEMENT_ENABLED' => true,
+      'MONTHLY_STATS_DAY' => nil,
+      'PUBLIC_CHANNEL_ID' => '@veloutro'
+    )
+    AppClock.source = -> { Time.utc(2026, 8, 23, 9, 0) }
+    author = create_user(telegram_id: 304, username: 'Организатор')
+    failing_event = create_event(
+      author: author,
+      date: Date.new(2026, 8, 24),
+      time: '09:00',
+      published: true
+    )
+    following_event = create_event(
+      author: author,
+      date: Date.new(2026, 8, 24),
+      time: '10:00',
+      published: true
+    )
+    failing_text = Bot::Helpers::Formatter.event_info(failing_event)
+    bot, api = recording_bot
+    allow(api).to receive(:send_message).and_wrap_original do |original, *args, **kwargs|
+      payload = (args.first || {}).merge(kwargs)
+      raise Faraday::TimeoutError, 'timeout' if payload[:text] == failing_text
+
+      original.call(*args, **kwargs)
+    end
+    described_class.start(bot)
+
+    expect(described_class.send(:send_daily_announcement, bot)).to be(false)
+    failed_delivery = NotificationDelivery.where(notification_type: 'announcement.daily').order(:id).second
+    4.times do
+      retry_at = failed_delivery.reload.next_attempt_at
+      AppClock.source = -> { retry_at }
+      expect(described_class.send(:send_daily_announcement, bot)).to be(false)
+    end
+
+    expect(
+      NotificationDelivery.where(notification_type: 'announcement.daily').order(:id).pluck(:status)
+    ).to eq(%w[delivered failed delivered])
+    expect(api.sent_messages.map { |message| message[:text] }).to eq(
+      [I18n.t('daily_announcement_header'), Bot::Helpers::Formatter.event_info(following_event)]
+    )
+    expect(described_class.status[:last_announcement_at]).to be_nil
+    expect(Notifications::DailyAnnouncement.backlog?).to be(false)
   end
 
   it 'does not record monthly statistics when Telegram delivery fails' do

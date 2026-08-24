@@ -43,6 +43,9 @@ module Bot
           'Не отправлялся'
         end
         status_info << "📢 Последний анонс: #{last_announcement_text}"
+        announcement_counts = status[:announcement_outbox_counts]
+        status_info << "📨 Ожидают доставки анонсов: #{announcement_counts[:queued]}"
+        status_info << "⚠️ Ошибки доставки анонсов: #{announcement_counts[:failed]}"
         status_info << "📆 День месячной статистики: #{APP_CONFIG.monthly_stats_day || 'Не задан'}"
         status_info << "🌍 Часовой пояс: #{APP_CONFIG.timezone}"
         status_info << ""

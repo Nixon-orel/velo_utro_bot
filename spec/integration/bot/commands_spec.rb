@@ -60,6 +60,25 @@ RSpec.describe 'Telegram command flows' do
 
   it 'shows scheduler runtime details to an administrator' do
     use_app_config('PUBLIC_CHANNEL_ID' => '@veloutro', 'ADMIN_IDS' => [telegram_user_record.id.to_s])
+    Notifications::Outbox.enqueue!([
+      {
+        notification_type: 'announcement.daily',
+        context_key: '2026-08-24',
+        idempotency_key: 'announcement:daily:2026-08-24:pending',
+        chat_id: '@veloutro',
+        payload: { text: 'Pending announcement' }
+      }
+    ])
+    NotificationDelivery.create!(
+      notification_type: 'announcement.daily',
+      context_key: '2026-08-23',
+      idempotency_key: 'announcement:daily:2026-08-23:failed',
+      chat_id: '@veloutro',
+      payload: { text: 'Failed announcement' },
+      status: 'failed',
+      attempts: NotificationDelivery::MAX_ATTEMPTS,
+      last_error: 'Faraday::TimeoutError: timeout'
+    )
 
     router.call(command_message('/scheduler_status'))
 
@@ -67,6 +86,8 @@ RSpec.describe 'Telegram command flows' do
     expect(api.sent_messages.last[:text]).to include(
       '🤖 Статус планировщика:',
       '🔔 Ежедневные анонсы:',
+      '📨 Ожидают доставки анонсов: 1',
+      '⚠️ Ошибки доставки анонсов: 1',
       '📆 День месячной статистики:',
       '📢 Последний анонс:',
       "🌍 Часовой пояс: #{APP_CONFIG.timezone}",

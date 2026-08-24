@@ -4,15 +4,17 @@ module Bot
   module Helpers
     class Scheduler
       LOCK_FILE_PATH = '/tmp/velo_utro_bot_scheduler.lock'
-      LAST_ANNOUNCEMENT_PATH = '/tmp/velo_utro_bot_last_announcement'
       LAST_MONTHLY_STATS_PATH = '/tmp/velo_utro_bot_last_monthly_stats'
+      ANNOUNCEMENT_OUTBOX_POLL_INTERVAL = '30s'
 
       @scheduler = nil
       @daily_job = nil
       @monthly_job = nil
+      @announcement_outbox_job = nil
       @daily_cron_expression = nil
       @mutex = Mutex.new
       @lock_file = nil
+      @announcement_service = nil
 
       class << self
         def start(bot)
@@ -27,10 +29,13 @@ module Bot
             end
 
             @scheduler = Rufus::Scheduler.new
+            @announcement_service = build_announcement_service(bot)
             schedule_daily_announcement(bot) if APP_CONFIG.daily_announcement_enabled?
             schedule_monthly_statistics(bot) if APP_CONFIG.monthly_stats_day
+            schedule_announcement_outbox_processing if announcement_outbox_needed?
           end
 
+          process_announcement_outbox if @announcement_outbox_job
           log(:info, 'Schedulers started')
           true
         rescue => e
@@ -46,8 +51,10 @@ module Bot
             @scheduler = nil
             @daily_job = nil
             @monthly_job = nil
+            @announcement_outbox_job = nil
             @daily_cron_expression = nil
             @lock_file = nil
+            @announcement_service = nil
             [current_scheduler, current_lock_file]
           end
 
@@ -65,9 +72,11 @@ module Bot
               scheduler_running: @scheduler&.up? || false,
               daily_job_active: !@daily_job.nil?,
               monthly_job_active: !@monthly_job.nil?,
+              announcement_outbox_job_active: !@announcement_outbox_job.nil?,
               next_run: calculate_next_run(@daily_cron_expression),
               cron_expression: @daily_cron_expression,
               last_announcement_at: last_announcement_at,
+              announcement_outbox_counts: Notifications::DailyAnnouncement.status_counts,
               jobs_count: @scheduler&.jobs&.count || 0,
               lock_held: lock_held?
             }
@@ -78,9 +87,11 @@ module Bot
             scheduler_running: false,
             daily_job_active: false,
             monthly_job_active: false,
+            announcement_outbox_job_active: false,
             next_run: nil,
             cron_expression: nil,
             last_announcement_at: nil,
+            announcement_outbox_counts: { queued: 0, failed: 0 },
             jobs_count: 0,
             lock_held: false
           }
@@ -89,7 +100,9 @@ module Bot
         private
 
         def enabled?
-          APP_CONFIG.daily_announcement_enabled? || !APP_CONFIG.monthly_stats_day.nil?
+          APP_CONFIG.daily_announcement_enabled? ||
+            !APP_CONFIG.monthly_stats_day.nil? ||
+            Notifications::DailyAnnouncement.backlog?
         end
 
         def schedule_daily_announcement(bot)
@@ -111,6 +124,23 @@ module Bot
           cron_expression = "0 9 #{stats_day} * * UTC"
           @monthly_job = @scheduler.schedule_cron(cron_expression) { send_monthly_statistics(bot) }
           log(:info, 'Monthly statistics scheduled', day: stats_day, cron_expression: cron_expression)
+        end
+
+        def schedule_announcement_outbox_processing
+          @announcement_outbox_job = @scheduler.every(ANNOUNCEMENT_OUTBOX_POLL_INTERVAL) do
+            process_announcement_outbox
+          end
+        end
+
+        def process_announcement_outbox
+          @announcement_service&.process_pending
+        rescue => e
+          log(:error, 'Failed to process daily announcement outbox', exception: e)
+          []
+        end
+
+        def announcement_outbox_needed?
+          APP_CONFIG.daily_announcement_enabled? || Notifications::DailyAnnouncement.backlog?
         end
 
         def acquire_lock
@@ -163,54 +193,61 @@ module Bot
           return false if channel_id.to_s.empty?
 
           events = Event.next_24_hours(now: AppClock.now).select(&:published?)
-          send_announcement_messages(bot, channel_id, events)
-          File.write(LAST_ANNOUNCEMENT_PATH, current_time.to_i.to_s)
-          log(:info, 'Daily announcement sent', events_count: events.count)
-          true
+          delivered = announcement_service(bot).deliver(
+            messages: announcement_messages(events),
+            channel_id: channel_id,
+            at: current_time
+          )
+          if delivered
+            log(:info, 'Daily announcement sent', events_count: events.count)
+          else
+            log(:warn, 'Daily announcement queued for retry', events_count: events.count)
+          end
+          delivered
         rescue => e
           log(:error, 'Failed to send daily announcement', exception: e)
           false
         end
 
         def recent_announcement?(current_time)
-          return false unless File.exist?(LAST_ANNOUNCEMENT_PATH)
-
-          last_time = File.read(LAST_ANNOUNCEMENT_PATH).to_i
-          current_time.to_i - last_time < 20.hours
+          last_time = last_announcement_at
+          last_time && current_time.to_i - last_time.to_i < 20.hours
         end
 
         def last_announcement_at
-          return unless File.exist?(LAST_ANNOUNCEMENT_PATH)
-
-          timestamp = Integer(File.read(LAST_ANNOUNCEMENT_PATH).strip, 10)
-          Time.at(timestamp).utc if timestamp.positive?
-        rescue ArgumentError, SystemCallError => e
-          log(:warn, 'Failed to read last announcement time', exception: e)
+          Notifications::DailyAnnouncement.last_completed_at&.utc
+        rescue ActiveRecord::ActiveRecordError => e
+          log(:warn, 'Failed to read last announcement delivery', exception: e)
           nil
         end
 
-        def send_announcement_messages(bot, channel_id, events)
+        def announcement_messages(events)
           if events.empty?
-            bot.api.send_message(
-              chat_id: channel_id,
-              text: I18n.t('daily_announcement_no_events'),
-              parse_mode: 'HTML'
-            )
-            return
+            return [
+              {
+                key: 'empty',
+                text: I18n.t('daily_announcement_no_events')
+              }
+            ]
           end
 
-          bot.api.send_message(
-            chat_id: channel_id,
-            text: I18n.t('daily_announcement_header'),
-            parse_mode: 'HTML'
+          [{ key: 'header', text: I18n.t('daily_announcement_header') }] +
+            events.map do |event|
+              {
+                key: "event:#{event.id}",
+                text: Bot::Helpers::Formatter.event_info(event)
+              }
+            end
+        end
+
+        def announcement_service(bot)
+          @announcement_service ||= build_announcement_service(bot)
+        end
+
+        def build_announcement_service(bot)
+          Notifications::DailyAnnouncement.new(
+            gateway: Notifications::TelegramGateway.new(bot)
           )
-          events.each do |event|
-            bot.api.send_message(
-              chat_id: channel_id,
-              text: Bot::Helpers::Formatter.event_info(event),
-              parse_mode: 'HTML'
-            )
-          end
         end
 
         def send_monthly_statistics(bot)

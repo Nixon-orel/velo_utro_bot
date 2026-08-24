@@ -8,11 +8,13 @@ class NotificationDelivery < ActiveRecord::Base
   PROCESSING_LEASE = 5.minutes
   MAX_ATTEMPTS = 5
   RETRY_DELAYS = [30.seconds, 2.minutes, 10.minutes, 30.minutes].freeze
+  EVENT_OPTIONAL_NOTIFICATION_TYPES = ['announcement.daily'].freeze
 
-  belongs_to :event
+  belongs_to :event, optional: true
   belongs_to :recipient, class_name: 'User', optional: true
 
   validates :notification_type, :context_key, :idempotency_key, :chat_id, presence: true
+  validates :event, presence: true, unless: :event_optional?
   validates :status, inclusion: { in: STATUSES }
   validates :operation, inclusion: { in: OPERATIONS }
   validates :attempts, numericality: { only_integer: true, greater_than_or_equal_to: 0 }
@@ -20,12 +22,15 @@ class NotificationDelivery < ActiveRecord::Base
   validate :state_timestamps_are_consistent
 
   class << self
-    def claim_due(now: AppClock.now, limit: 100, ids: nil)
+    def claim_due(now: AppClock.now, limit: 100, ids: nil, notification_type_prefix: nil)
       transaction do
         pending = where(status: 'pending').where('next_attempt_at <= ?', now)
         stale = where(status: 'processing').where('locked_at <= ?', now - PROCESSING_LEASE)
         scope = pending.or(stale)
         scope = scope.where(id: ids) if ids
+        if notification_type_prefix
+          scope = scope.where('notification_type LIKE ?', "#{notification_type_prefix}%")
+        end
 
         deliveries = scope.order(:next_attempt_at, :id).limit(limit).lock('FOR UPDATE SKIP LOCKED').to_a
         deliveries.each do |delivery|
@@ -102,6 +107,10 @@ class NotificationDelivery < ActiveRecord::Base
 
   def payload_is_an_object
     errors.add(:payload, 'must be an object') unless payload.is_a?(Hash)
+  end
+
+  def event_optional?
+    EVENT_OPTIONAL_NOTIFICATION_TYPES.include?(notification_type)
   end
 
   def state_timestamps_are_consistent

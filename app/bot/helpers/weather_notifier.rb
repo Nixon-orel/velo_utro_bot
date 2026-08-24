@@ -68,7 +68,8 @@ module Bot
         @gateway = Notifications::TelegramGateway.new(bot)
         @outbox_processor = Notifications::OutboxProcessor.new(
           gateway: @gateway,
-          delivery_guard: self.class.method(:delivery_current?)
+          delivery_guard: self.class.method(:delivery_current?),
+          notification_type_prefix: WEATHER_NOTIFICATION_PREFIX
         )
       end
 

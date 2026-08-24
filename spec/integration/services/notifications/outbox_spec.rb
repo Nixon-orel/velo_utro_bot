@@ -2,6 +2,38 @@ require 'integration_helper'
 require 'securerandom'
 
 RSpec.describe Notifications::Outbox do
+  it 'rejects a weather delivery without its event' do
+    delivery = NotificationDelivery.new(
+      notification_type: 'weather.critical_24h',
+      context_key: 'event-context',
+      idempotency_key: 'weather:missing-event',
+      chat_id: '123',
+      payload: { text: 'Weather changed' },
+      status: 'pending',
+      attempts: 0,
+      next_attempt_at: AppClock.now
+    )
+
+    expect(delivery).not_to be_valid
+    expect(delivery.errors[:event]).to be_present
+  end
+
+  it 'rejects an unknown delivery type without its event' do
+    delivery = NotificationDelivery.new(
+      notification_type: 'unknown.system',
+      context_key: 'unknown-context',
+      idempotency_key: 'unknown:missing-event',
+      chat_id: '123',
+      payload: { text: 'Unknown notification' },
+      status: 'pending',
+      attempts: 0,
+      next_attempt_at: AppClock.now
+    )
+
+    expect(delivery).not_to be_valid
+    expect(delivery.errors[:event]).to be_present
+  end
+
   it 'enqueues a recipient batch atomically and reuses existing idempotency keys' do
     author = create_user(telegram_id: 1)
     participant = create_user(telegram_id: 2)

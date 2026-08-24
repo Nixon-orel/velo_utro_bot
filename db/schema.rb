@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 10) do
+ActiveRecord::Schema[8.0].define(version: 11) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -43,7 +43,7 @@ ActiveRecord::Schema[8.0].define(version: 10) do
   end
 
   create_table "notification_deliveries", force: :cascade do |t|
-    t.bigint "event_id", null: false
+    t.bigint "event_id"
     t.bigint "recipient_id"
     t.string "notification_type", null: false
     t.string "context_key", null: false

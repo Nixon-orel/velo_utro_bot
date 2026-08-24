@@ -15,7 +15,7 @@ module Notifications
         idempotency_key = attributes.fetch(:idempotency_key)
         NotificationDelivery.create_or_find_by!(idempotency_key: idempotency_key) do |delivery|
           delivery.assign_attributes(
-            event: attributes.fetch(:event),
+            event: attributes[:event],
             recipient: attributes[:recipient],
             notification_type: attributes.fetch(:notification_type),
             context_key: attributes.fetch(:context_key),

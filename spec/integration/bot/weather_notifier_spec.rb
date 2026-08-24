@@ -6,6 +6,24 @@ RSpec.describe Bot::Helpers::WeatherNotifier do
     AppClock.source = -> { Time.utc(2026, 8, 22, 9, 0) }
   end
 
+  it 'does not claim a daily announcement from the shared outbox' do
+    announcement = Notifications::Outbox.enqueue!([
+      {
+        notification_type: 'announcement.daily',
+        context_key: '2026-08-24T18:30Z',
+        idempotency_key: 'announcement:daily:2026-08-24T18:30Z:empty',
+        chat_id: '@veloutro',
+        payload: { text: 'No events', parse_mode: 'HTML' }
+      }
+    ]).first
+    bot, api = recording_bot
+
+    described_class.new(bot).process_pending_deliveries
+
+    expect(api.sent_messages).to be_empty
+    expect(announcement.reload).to have_attributes(status: 'pending', attempts: 0)
+  end
+
   it 'updates the existing channel message silently for a non-critical change' do
     author = create_user(telegram_id: 1)
     event = create_event(

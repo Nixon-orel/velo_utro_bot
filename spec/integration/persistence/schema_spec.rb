@@ -2,6 +2,7 @@ require 'integration_helper'
 require_relative '../../../db/migrations/008_create_notification_deliveries'
 require_relative '../../../db/migrations/009_add_weather_schedule_revision_to_events'
 require_relative '../../../db/migrations/010_add_finalized_at_to_notification_deliveries'
+require_relative '../../../db/migrations/011_make_event_optional_on_notification_deliveries'
 
 RSpec.describe 'test database schema' do
   it 'is current and exposes all migrated persistence columns' do
@@ -35,6 +36,7 @@ RSpec.describe 'test database schema' do
       'last_error',
       'error_history'
     )
+    expect(NotificationDelivery.columns_hash.fetch('event_id').null).to be(true)
   end
 
   it 'keeps the checked-in schema dump synchronized with context migrations' do
@@ -186,6 +188,22 @@ RSpec.describe 'test database schema' do
       .to raise_error(ActiveRecord::IrreversibleMigration)
     expect(NotificationDelivery.column_names).to include('finalized_at')
     expect(Event.column_names).to include('weather_schedule_revision')
+  end
+
+  it 'refuses to make event mandatory while system notifications use the outbox' do
+    Notifications::Outbox.enqueue!([
+      {
+        notification_type: 'announcement.daily',
+        context_key: '2026-08-24',
+        idempotency_key: 'announcement:daily:2026-08-24:empty',
+        chat_id: '@veloutro',
+        payload: { text: 'No events', parse_mode: 'HTML' }
+      }
+    ])
+
+    expect { MakeEventOptionalOnNotificationDeliveries.new.down }
+      .to raise_error(ActiveRecord::IrreversibleMigration)
+    expect(NotificationDelivery.columns_hash.fetch('event_id').null).to be(true)
   end
 
   it 'keeps both context migrations applied while an event revision is in use' do

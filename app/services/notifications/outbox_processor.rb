@@ -1,15 +1,21 @@
 module Notifications
   class OutboxProcessor
-    def initialize(gateway:, delivery_guard: nil)
+    def initialize(gateway:, delivery_guard: nil, notification_type_prefix: nil)
       @gateway = gateway
       @delivery_guard = delivery_guard || ->(_delivery) { true }
+      @notification_type_prefix = notification_type_prefix
     end
 
     def process_due(limit: 100, ids: nil)
       processed = []
       limit.times do
         now = AppClock.now
-        delivery = NotificationDelivery.claim_due(now: now, limit: 1, ids: ids).first
+        delivery = NotificationDelivery.claim_due(
+          now: now,
+          limit: 1,
+          ids: ids,
+          notification_type_prefix: @notification_type_prefix
+        ).first
         break unless delivery
 
         process_delivery(delivery, now: now)
