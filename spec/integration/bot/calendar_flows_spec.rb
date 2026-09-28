@@ -83,6 +83,14 @@ RSpec.describe 'Telegram calendar flows' do
     expect(api.sent_messages.last(2).map { |payload| payload[:text] }).to eq(
       [I18n.t('date_saved'), I18n.t('event_updated')]
     )
+    expect(api.edited_messages.last).to include(
+      chat_id: '@veloutro',
+      message_id: 42,
+      text: Bot::Helpers::Formatter.event_info(event),
+      parse_mode: 'HTML'
+    )
+    callbacks = api.edited_messages.last.fetch(:reply_markup).inline_keyboard.flatten.map(&:callback_data)
+    expect(callbacks).to eq(["join-#{event.id}", "unjoin-#{event.id}"])
   end
 
   it 'does not notify participants or the channel when the selected date is unchanged' do
@@ -111,6 +119,7 @@ RSpec.describe 'Telegram calendar flows' do
       [private_chat.id, private_chat.id]
     )
     expect(session.reload).to have_attributes(state: nil, edit_event_id: nil)
+    expect(api.edited_messages).to be_empty
   end
 
   it 'resets a date-edit state whose event no longer exists' do

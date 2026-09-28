@@ -138,6 +138,7 @@ module Bot
         notifier = Bot::Helpers::Notifier.new(@bot)
         notifier.notify_participants(event, 'date_changed_notification', { new_date: new_date })
         notifier.notify_channel_about_change(event, 'date_changed_channel_notification', { new_date: new_date })
+        notifier.refresh_channel_event(event)
 
         if event.weather_data.present? && APP_CONFIG.weather_enabled?
           Bot::Helpers::WeatherScheduler.schedule_weather_updates(event)

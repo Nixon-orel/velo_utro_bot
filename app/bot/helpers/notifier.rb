@@ -37,8 +37,45 @@ module Bot
         notification = render_template(template_key, vars)
         send_notification(channel_id, notification)
       end
+
+      def refresh_channel_event(event)
+        channel_id = APP_CONFIG.public_channel_id
+        return if channel_id.to_s.empty?
+        return unless event.published && event.channel_message_id
+
+        @bot.api.edit_message_text(
+          chat_id: channel_id,
+          message_id: event.channel_message_id,
+          text: Bot::Helpers::Formatter.event_info(event),
+          parse_mode: 'HTML',
+          reply_markup: channel_participation_markup(event)
+        )
+      rescue => e
+        AppLogger.error(
+          'Bot::Helpers::Notifier',
+          'Failed to refresh channel event message',
+          event_id: event.id,
+          channel_message_id: event.channel_message_id,
+          exception: e
+        )
+      end
       
       private
+
+      def channel_participation_markup(event)
+        buttons = [
+          Telegram::Bot::Types::InlineKeyboardButton.new(
+            text: I18n.t('buttons.join'),
+            callback_data: "join-#{event.id}"
+          ),
+          Telegram::Bot::Types::InlineKeyboardButton.new(
+            text: I18n.t('buttons.unjoin'),
+            callback_data: "unjoin-#{event.id}"
+          )
+        ]
+
+        Telegram::Bot::Types::InlineKeyboardMarkup.new(inline_keyboard: [buttons])
+      end
       
       def build_event_vars(event, additional_params = {})
         vars = additional_params.dup

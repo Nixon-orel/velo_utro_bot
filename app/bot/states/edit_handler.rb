@@ -89,6 +89,7 @@ module Bot
         
         notifier.notify_participants(event, "#{notification_key}_notification", params)
         notifier.notify_channel_about_change(event, "#{notification_key}_channel_notification", params)
+        notifier.refresh_channel_event(event)
       end
       
       def reset_edit_state

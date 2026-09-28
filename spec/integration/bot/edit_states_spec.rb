@@ -45,6 +45,44 @@ RSpec.describe 'Telegram event editing states' do
     expect(api.sent_messages.last[:text]).to eq(I18n.t('invalid_input'))
   end
 
+  it 'does not refresh the channel message when the value is unchanged' do
+    author = create_user(telegram_id: telegram_author.id)
+    event = create_event(
+      author: author,
+      time: '09:00',
+      published: true,
+      channel_message_id: 42
+    )
+    session = edit_session(event, 'edit_time')
+
+    router.call(text_message('09:00'))
+
+    expect(event.reload.time).to eq('09:00')
+    expect(session.reload).to have_attributes(state: nil, edit_event_id: nil)
+    expect(api.edited_messages).to be_empty
+  end
+
+  it 'keeps the saved edit and confirmations when the channel refresh fails' do
+    failed_bot, failed_api = recording_bot(edit_errors: [Faraday::TimeoutError.new('timeout')])
+    failed_router = Bot::UpdateRouter.new(failed_bot)
+    author = create_user(telegram_id: telegram_author.id)
+    event = create_event(
+      author: author,
+      time: '09:00',
+      published: true,
+      channel_message_id: 42
+    )
+    session = edit_session(event, 'edit_time')
+
+    failed_router.call(text_message('10:30'))
+
+    expect(event.reload.time).to eq('10:30')
+    expect(session.reload).to have_attributes(state: nil, edit_event_id: nil)
+    expect(failed_api.sent_messages.last(2).map { |payload| payload[:text] }).to eq(
+      [I18n.t('time_saved'), I18n.t('event_updated')]
+    )
+  end
+
   it 'notifies participants and the channel when optional information is removed' do
     author = create_user(telegram_id: telegram_author.id)
     participant = create_user(telegram_id: 202)
@@ -64,6 +102,34 @@ RSpec.describe 'Telegram event editing states' do
     expect(api.sent_messages.map { |payload| payload[:chat_id] }).to eq(
       [participant.telegram_id, '@veloutro', private_chat.id, private_chat.id]
     )
+  end
+
+  [
+    ['edit_time', :time, '10:30'],
+    ['edit_info', :additional_info, 'Берём фонари'],
+    ['edit_track', :track, 'https://example.com/new-track'],
+    ['edit_map', :map, 'https://example.com/new-map']
+  ].each do |state, field, value|
+    it "keeps channel participation buttons after #{field} is edited" do
+      author = create_user(telegram_id: telegram_author.id)
+      event = create_event(
+        author: author,
+        published: true,
+        channel_message_id: 42
+      )
+      edit_session(event, state)
+
+      router.call(text_message(value))
+
+      expect(api.edited_messages.last).to include(
+        chat_id: '@veloutro',
+        message_id: 42,
+        text: Bot::Helpers::Formatter.event_info(event.reload),
+        parse_mode: 'HTML'
+      )
+      callbacks = api.edited_messages.last.fetch(:reply_markup).inline_keyboard.flatten.map(&:callback_data)
+      expect(callbacks).to eq(["join-#{event.id}", "unjoin-#{event.id}"])
+    end
   end
 
   it 'resets an edit state whose event no longer exists' do

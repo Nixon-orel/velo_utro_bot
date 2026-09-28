@@ -40,4 +40,40 @@ RSpec.describe Bot::Helpers::Notifier do
 
     expect(api.sent_messages.last).to include(chat_id: '@veloutro', parse_mode: 'HTML')
   end
+
+  it 'does not refresh a draft event in the channel' do
+    bot, api = recording_bot
+    event = create_event(
+      author: create_user(telegram_id: 1),
+      published: false,
+      channel_message_id: 42
+    )
+
+    described_class.new(bot).refresh_channel_event(event)
+
+    expect(api.edited_messages).to be_empty
+  end
+
+  it 'does not refresh a published event without a channel message' do
+    bot, api = recording_bot
+    event = create_event(author: create_user(telegram_id: 1), published: true)
+
+    described_class.new(bot).refresh_channel_event(event)
+
+    expect(api.edited_messages).to be_empty
+  end
+
+  it 'does not refresh an event when the public channel is not configured' do
+    use_app_config('PUBLIC_CHANNEL_ID' => '')
+    bot, api = recording_bot
+    event = create_event(
+      author: create_user(telegram_id: 1),
+      published: true,
+      channel_message_id: 42
+    )
+
+    described_class.new(bot).refresh_channel_event(event)
+
+    expect(api.edited_messages).to be_empty
+  end
 end
