@@ -45,6 +45,25 @@ RSpec.describe Bot::Helpers::WeatherNotifier do
     expect(NotificationDelivery.last.reload.finalized_at).to eq(AppClock.now)
   end
 
+  it 'keeps participation buttons when refreshing the published channel message' do
+    author = create_user(telegram_id: 1)
+    event = create_event(
+      author: author,
+      published: true,
+      channel_message_id: 42,
+      weather_data: weather(temp: 11)
+    )
+    bot, api = recording_bot
+
+    described_class.new(bot).handle_24h_weather_update(event, weather(temp: 10), weather(temp: 11))
+
+    markup = api.edited_messages.last.fetch(:reply_markup).to_compact_hash
+    callbacks = markup.fetch(:inline_keyboard).flatten.map do |button|
+      button.fetch(:callback_data)
+    end
+    expect(callbacks).to eq(["join-#{event.id}", "unjoin-#{event.id}"])
+  end
+
   it 'does not publish a two-hour forecast for a draft event' do
     author = create_user(telegram_id: 1)
     event = create_event(author: author, published: false)

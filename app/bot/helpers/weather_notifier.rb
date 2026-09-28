@@ -233,11 +233,23 @@ module Bot
             payload: {
               message_id: event.channel_message_id,
               text: Bot::Helpers::Formatter.event_info(event),
-              parse_mode: 'HTML'
+              parse_mode: 'HTML',
+              reply_markup: channel_participation_markup(event)
             }
           )
         ])
         PreparedUpdate.new(deliveries: deliveries)
+      end
+
+      def channel_participation_markup(event)
+        {
+          inline_keyboard: [
+            [
+              { text: I18n.t('buttons.join'), callback_data: "join-#{event.id}" },
+              { text: I18n.t('buttons.unjoin'), callback_data: "unjoin-#{event.id}" }
+            ]
+          ]
+        }
       end
       
       def format_critical_change_message(event, old_weather, new_weather)
